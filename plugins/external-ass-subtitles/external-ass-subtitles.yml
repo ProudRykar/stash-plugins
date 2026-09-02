@@ -1,0 +1,30 @@
+id: external-ass-subtitles
+name: External ASS Subtitles
+description: Renders external ASS/SSA subtitle files next to scene videos using JASSUB.
+version: 1.0.0
+url: https://github.com/ProudRykar/external-ass-subtitles
+
+interface: raw
+
+exec:
+  - python
+  - "{pluginDir}/external_ass_subtitles.py"
+
+ui:
+  javascript:
+    - external-ass-subtitles.js
+  css:
+    - external-ass-subtitles.css
+  assets:
+    /jassub: jassub
+
+settings:
+  searchSubdirectories:
+    displayName: Search subtitle subdirectories
+    description: Also search subdirectories next to the scene video.
+    type: BOOLEAN
+
+  defaultEnabled:
+    displayName: Show subtitles by default
+    description: Automatically enable the first external ASS subtitle track.
+    type: BOOLEAN
