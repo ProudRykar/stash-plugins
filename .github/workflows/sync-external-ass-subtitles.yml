@@ -25,7 +25,7 @@ jobs:
         with:
           repository: ProudRykar/external-ass-subtitles
           ref: develop
-          path: /tmp/external-ass-subtitles
+          path: external-ass-subtitles-source
           fetch-depth: 1
 
       - name: Sync plugin
@@ -35,7 +35,7 @@ jobs:
           rm -rf plugins/external-ass-subtitles
           mkdir -p plugins/external-ass-subtitles
 
-          cp -a /tmp/external-ass-subtitles/. \
+          cp -a external-ass-subtitles-source/. \
             plugins/external-ass-subtitles/
 
           rm -rf plugins/external-ass-subtitles/.git
