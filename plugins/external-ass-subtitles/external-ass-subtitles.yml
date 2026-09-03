@@ -28,3 +28,9 @@ settings:
     displayName: Show subtitles by default
     description: Automatically enable the first external ASS subtitle track.
     type: BOOLEAN
+
+  useNativeCc:
+    displayName: Use native CC menu
+    description: Use Stash's native CC menu instead of custom button.
+    type: BOOLEAN
+    default: true

@@ -1,0 +1,61 @@
+name: Sync External ASS Subtitles
+
+on:
+  repository_dispatch:
+    types:
+      - external-ass-subtitles-updated
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout stash-plugins
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Checkout external-ass-subtitles
+        uses: actions/checkout@v4
+        with:
+          repository: ProudRykar/external-ass-subtitles
+          ref: develop
+          path: /tmp/external-ass-subtitles
+          fetch-depth: 1
+
+      - name: Sync plugin
+        run: |
+          set -e
+
+          rm -rf plugins/external-ass-subtitles
+          mkdir -p plugins/external-ass-subtitles
+
+          cp -a /tmp/external-ass-subtitles/. \
+            plugins/external-ass-subtitles/
+
+          rm -rf plugins/external-ass-subtitles/.git
+
+      - name: Show changes
+        run: |
+          git status --short
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add plugins/external-ass-subtitles
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Sync external-ass-subtitles"
+
+          git push origin main
