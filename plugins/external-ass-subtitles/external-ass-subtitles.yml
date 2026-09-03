@@ -1,7 +1,6 @@
-id: external-ass-subtitles
 name: External ASS Subtitles
 description: Renders external ASS/SSA subtitle files next to scene videos using JASSUB.
-version: 1.0.0
+version: 1.1.0
 url: https://github.com/ProudRykar/external-ass-subtitles
 
 interface: raw
@@ -33,4 +32,3 @@ settings:
     displayName: Use native CC menu
     description: Use Stash's native CC menu instead of custom button.
     type: BOOLEAN
-    default: true

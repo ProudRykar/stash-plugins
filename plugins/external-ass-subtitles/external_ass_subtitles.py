@@ -117,7 +117,7 @@ def make_label(path):
 
         return lang
 
-    return "ASS"
+    return Path(path).suffix.upper().lstrip(".")
 
 
 def filename_matches_video(
@@ -185,6 +185,8 @@ def find_external_subtitles(video_path):
         if candidate.suffix.lower() not in {
             ".ass",
             ".ssa",
+            ".srt",
+            ".vtt"
         }:
             continue
 
@@ -206,7 +208,7 @@ def find_external_subtitles(video_path):
     )
 
 
-def read_ass(path):
+def read_subtitle(path):
     encodings = (
         "utf-8-sig",
         "utf-8",
@@ -301,7 +303,7 @@ def build_tracks(scene):
         )
 
         for subtitle_path in subtitles:
-            text = read_ass(
+            text = read_subtitle(
                 subtitle_path
             )
 
@@ -325,6 +327,8 @@ def build_tracks(scene):
                         subtitle_path.name,
                     "path":
                         str(subtitle_path),
+                    "format": 
+                        subtitle_path.suffix.lower().lstrip("."),
                     "text": text,
                 }
             )
