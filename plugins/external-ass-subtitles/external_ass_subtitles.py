@@ -10,35 +10,139 @@ PLUGIN_ID = "external-ass-subtitles"
 
 
 LANGUAGES = {
+    # English
     "en": "English",
     "eng": "English",
+
+    # Russian
     "ru": "Русский",
     "rus": "Русский",
+
+    # Japanese
     "ja": "日本語",
     "jpn": "日本語",
+
+    # Chinese
+    "zh": "中文",
+    "chi": "中文",
+    "zho": "中文",
+
+    # Korean
+    "ko": "한국어",
+    "kor": "한국어",
+
+    # German
     "de": "Deutsch",
     "ger": "Deutsch",
     "deu": "Deutsch",
+
+    # French
     "fr": "Français",
+    "fre": "Français",
     "fra": "Français",
+
+    # Spanish
     "es": "Español",
     "spa": "Español",
+
+    # Italian
     "it": "Italiano",
     "ita": "Italiano",
+
+    # Portuguese
     "pt": "Português",
     "por": "Português",
-    "zh": "中文",
-    "zho": "中文",
-    "ko": "한국어",
-    "kor": "한국어",
+
+    # Arabic
+    "ar": "العربية",
+    "ara": "العربية",
+
+    # Polish
+    "pl": "Polski",
+    "pol": "Polski",
+
+    # Dutch
+    "nl": "Nederlands",
+    "dut": "Nederlands",
+    "nld": "Nederlands",
+
+    # Turkish
+    "tr": "Türkçe",
+    "tur": "Türkçe",
+
+    # Czech
+    "cs": "Čeština",
+    "cze": "Čeština",
+    "ces": "Čeština",
+
+    # Ukrainian
+    "uk": "Українська",
+    "ukr": "Українська",
+
+    # Swedish
+    "sv": "Svenska",
+    "swe": "Svenska",
+
+    # Danish
+    "da": "Dansk",
+    "dan": "Dansk",
+
+    # Finnish
+    "fi": "Suomi",
+    "fin": "Suomi",
+
+    # Norwegian
+    "no": "Norsk",
+    "nor": "Norsk",
+
+    # Romanian
+    "ro": "Română",
+    "rum": "Română",
+    "ron": "Română",
+
+    # Hungarian
+    "hu": "Magyar",
+    "hun": "Magyar",
+
+    # Greek
+    "el": "Ελληνικά",
+    "gre": "Ελληνικά",
+    "ell": "Ελληνικά",
+
+    # Hebrew
+    "he": "עברית",
+    "heb": "עברית",
+
+    # Vietnamese
+    "vi": "Tiếng Việt",
+    "vie": "Tiếng Việt",
+
+    # Thai
+    "th": "ไทย",
+    "tha": "ไทย",
+
+    # Indonesian
+    "id": "Bahasa Indonesia",
+    "ind": "Bahasa Indonesia",
+
+    # Malay
+    "ms": "Bahasa Melayu",
+    "may": "Bahasa Melayu",
+    "msa": "Bahasa Melayu",
 }
 
 
 LANGUAGE_RE = re.compile(
-    r"(?:^|[._-])"
-    r"(en|eng|ru|rus|ja|jpn|de|ger|deu|fr|fra|"
-    r"es|spa|it|ita|pt|por|zh|zho|ko|kor)"
-    r"(?:$|[._-])",
+    r"(?:^|[._-])("
+    + "|".join(
+        re.escape(code)
+        for code in sorted(
+            LANGUAGES,
+            key=len,
+            reverse=True,
+        )
+    )
+    + r")(?:$|[._-])",
     re.IGNORECASE,
 )
 
@@ -81,7 +185,7 @@ def extract_source(filename, language):
     pattern = re.compile(
         rf"(?:^|[._-])"
         rf"{re.escape(language)}"
-        rf"(?:[._-]?)(.*)$",
+        rf"(?:[._-](.*))?$",
         re.IGNORECASE,
     )
 
@@ -90,9 +194,7 @@ def extract_source(filename, language):
     if not match:
         return ""
 
-    source = match.group(1)
-
-    source = source.lstrip("._- ")
+    source = match.group(1) or ""
 
     source = source.replace("_", " ")
 
