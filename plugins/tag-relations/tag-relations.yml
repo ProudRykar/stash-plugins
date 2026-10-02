@@ -1,13 +1,13 @@
 name: Tag Relations
 description: Manage relationships between Stash tags (similar/related)
 version: 0.1.5
-url: https://github.com/proudrykar/tag-relations
+url: https://github.com/ProudRykar/stash-plugins
 
-settings:
-  database_path:
-    displayName: Database path
-    type: STRING
-    default: ""
+interface: raw
+
+exec:
+  - python
+  - "{pluginDir}/backend/main.py"
 
 ui:
   javascript:
@@ -15,11 +15,11 @@ ui:
   css:
     - ui/styles.css
 
-exec:
-  - python
-  - "{pluginDir}/backend/main.py"
-
-interface: raw
+settings:
+  database_path:
+    displayName: Database path
+    type: STRING
+    default: ""
 
 hooks:
   - name: tag-destroy
