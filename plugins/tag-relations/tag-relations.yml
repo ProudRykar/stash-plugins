@@ -11,9 +11,9 @@ exec:
 
 ui:
   javascript:
-    - ui/index.js
+    - index.js
   css:
-    - ui/styles.css
+    - styles.css
 
 settings:
   database_path:
