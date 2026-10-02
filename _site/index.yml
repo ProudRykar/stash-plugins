@@ -5,41 +5,14 @@
   version: 1.1.0-0891c70
   date: 2026-09-05 00:58:41
   path: external-ass-subtitles.zip
-  sha256: 201fe34bddb31abcf4df30a9335811983f57183bca7ad1f2370a351a54795971
+  sha256: 677c60685463a3eeccf655c4deeca03f99cd51610910632a117f817f692d067c
 
-- id: notify-stash-plugins
-  name: Notify stash-plugins
-  metadata:
-    description: 
-  version: -03d4aef
-  date: 2026-09-03 01:42:06
-  path: notify-stash-plugins.zip
-  sha256: 1338262bc13c3f3b340acb1620600c1358c1012e8ad67442147e64e898d8218e
-
-- id: stash-tag-relations
+- id: tag-relations
   name: Tag Relations
   metadata:
     description: Manage relationships between Stash tags (similar/related)
-  version: 0.1.1-1abacde
-  date: 2026-10-02 22:21:07
-  path: stash-tag-relations.zip
-  sha256: fa3679dbc58879cc93da41b6f44020aaf0b3c043367d25ad5472ed453e91225e
-
-- id: notify
-  name: Notify stash-plugins
-  metadata:
-    description: 
-  version: -8a6d03c
-  date: 2026-10-02 21:58:14
-  path: notify.zip
-  sha256: 2f35fc7fcead48e3aac144d5fa6f1f335ed2bab87a86428760ad1a082f251bc3
-
-- id: deploy
-  name: Deploy repository to Github Pages
-  metadata:
-    description: 
-  version: -8a6d03c
-  date: 2026-10-02 21:58:14
-  path: deploy.zip
-  sha256: 2f35fc7fcead48e3aac144d5fa6f1f335ed2bab87a86428760ad1a082f251bc3
+  version: 0.1.3-dc1c9fb
+  date: 2026-10-02 22:39:24
+  path: tag-relations.zip
+  sha256: ba514c7d2fce96814a4d40b6d889f34b839121dd7f4a0f279284317e617422ec
 

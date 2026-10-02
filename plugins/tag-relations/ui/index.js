@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const PLUGIN_ID = 'stash-tag-relations';
+  const PLUGIN_ID = 'tag-relations';
 
   function log() {
     console.log('[Tag Relations]', ...arguments);
@@ -590,6 +590,32 @@
   }
 
   window.PluginApi.register.route('/plugin/tag-relations', TagRelationsPage);
+
+  try {
+    window.PluginApi.patch.after('TagPage', function (OriginalComponent) {
+      return function PatchedTagPage(props) {
+        var tag = props.tag;
+        var tagId = tag && tag.id;
+        log('TagPage render: tagId=' + tagId);
+
+        var originalElement = createElement(OriginalComponent, props);
+
+        if (!tagId) {
+          return originalElement;
+        }
+
+        return createElement(
+          Fragment,
+          null,
+          originalElement,
+          createElement(RelatedTagsPanel, { tagId: String(tagId) })
+        );
+      };
+    });
+    log('TagPage patch registered');
+  } catch (error) {
+    logError('Failed to register TagPage patch:', error);
+  }
 
   log('loaded');
 })();

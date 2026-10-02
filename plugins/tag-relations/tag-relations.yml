@@ -1,6 +1,6 @@
 name: Tag Relations
 description: Manage relationships between Stash tags (similar/related)
-version: 0.1.3
+version: 0.1.4
 url: https://github.com/proudrykar/tag-relations
 
 settings:
