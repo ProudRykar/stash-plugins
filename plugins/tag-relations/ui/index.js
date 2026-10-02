@@ -1337,121 +1337,316 @@ window.PluginApi.register.route(
 TagRelationsPage
 );
 
-/*
 
 /*
  * ============================================================
- * TagPage integration
+ * TagEditPanel integration
  * ============================================================
  *
- * TagEditPanel itself is NOT a PatchComponent in current Stash.
- * TagPage IS a PatchComponent, so this is the reliable extension
- * point.
+ * TagEditPanel itself is not a PatchComponent.
  *
- * We render the relations button alongside the edit panel and
- * keep the actual relations UI inside the tag edit area.
+ * TagPage IS patchable.
+ *
+ * PluginApi.patch.after() gives us:
+ *
+ *   (props, renderedResult)
+ *
+ * renderedResult is the actual React element tree returned by
+ * TagPage, so we can walk that tree and replace the
+ * TagEditPanel element with our own wrapper.
  */
+
+function getComponentName(type) {
+  if (!type) {
+    return '';
+  }
+
+  return (
+    type.displayName ||
+    type.name ||
+    ''
+  );
+}
+
+
+function isTagEditPanelElement(element) {
+  if (!React.isValidElement(element)) {
+    return false;
+  }
+
+  var name = getComponentName(
+    element.type
+  );
+
+  /*
+   * Primary check.
+   */
+  if (
+    name === 'TagEditPanel' ||
+    name === 'PatchedTagEditPanel'
+  ) {
+    return true;
+  }
+
+  /*
+   * Fallback check.
+   *
+   * This protects us if the production bundle changes the
+   * function name.
+   */
+  var props = element.props;
+
+  if (!props) {
+    return false;
+  }
+
+  return (
+    props.tag &&
+    props.onSubmit &&
+    props.onCancel &&
+    props.onDelete &&
+    props.setImage &&
+    props.setEncodingImage
+  );
+}
+
+
+function TagEditPanelWithRelations(_ref) {
+  var originalElement = _ref.originalElement;
+  var tag = _ref.tag;
+
+  var _useState18 = useState(false);
+
+  var showRelations =
+    _useState18[0];
+
+  var setShowRelations =
+    _useState18[1];
+
+
+  var tagId = tag && tag.id;
+
+
+  /*
+   * New tags do not have an ID yet.
+   *
+   * In that case simply render the original edit panel.
+   */
+  if (!tagId) {
+    return originalElement;
+  }
+
+
+  var toggleRelations =
+    function () {
+      setShowRelations(
+        function (value) {
+          return !value;
+        }
+      );
+    };
+
+
+  return createElement(
+    Fragment,
+    null,
+
+    /*
+     * Original Stash TagEditPanel.
+     */
+    originalElement,
+
+
+    /*
+     * Tag Relations button.
+     */
+    createElement(
+      'div',
+      {
+        className:
+          'tag-relations-edit-controls'
+      },
+
+      createElement(
+        'button',
+        {
+          type: 'button',
+
+          className:
+            'btn btn-secondary tag-relations-edit-button',
+
+          onClick:
+            toggleRelations
+        },
+
+        showRelations
+          ? 'Hide Tag Relations'
+          : 'Tag Relations'
+      )
+    ),
+
+
+    /*
+     * Relations panel.
+     */
+    showRelations &&
+      createElement(
+        'div',
+        {
+          className:
+            'tag-relations-edit-panel-wrapper'
+        },
+
+        createElement(
+          RelatedTagsPanel,
+          {
+            tagId: String(tagId)
+          }
+        )
+      )
+  );
+}
+
+
+function patchTagEditPanelTree(
+  element
+) {
+  /*
+   * Not a React element.
+   */
+  if (!React.isValidElement(element)) {
+    return element;
+  }
+
+
+  /*
+   * We found TagEditPanel.
+   */
+  if (
+    isTagEditPanelElement(element)
+  ) {
+    log(
+      'Found TagEditPanel in TagPage tree'
+    );
+
+    return createElement(
+      TagEditPanelWithRelations,
+      {
+        key: element.key,
+
+        tag:
+          element.props &&
+          element.props.tag,
+
+        originalElement:
+          element
+      }
+    );
+  }
+
+
+  /*
+   * Nothing to traverse.
+   */
+  if (
+    !element.props ||
+    element.props.children == null
+  ) {
+    return element;
+  }
+
+
+  /*
+   * Recursively process children.
+   */
+  var children =
+    React.Children.map(
+      element.props.children,
+      function (child) {
+        return patchTagEditPanelTree(
+          child
+        );
+      }
+    );
+
+
+  /*
+   * Recreate the element while preserving
+   * all of its original props.
+   */
+  return React.cloneElement(
+    element,
+    undefined,
+    children
+  );
+}
+
 
 try {
   window.PluginApi.patch.after(
     'TagPage',
-    function (OriginalComponent) {
-      return function PatchedTagPage(props) {
-        var tag = props.tag;
-        var tagId = tag && tag.id;
 
-        var _useState18 = useState(false);
-        var showRelations = _useState18[0];
-        var setShowRelations = _useState18[1];
+    function (
+      props,
+      renderedResult
+    ) {
+      log(
+        'TagPage after patch called'
+      );
 
-        /*
-         * Render the original Stash TagPage first.
-         */
-        var originalElement = createElement(
-          OriginalComponent,
-          props
+
+      /*
+       * TagPage did not return anything.
+       */
+      if (!renderedResult) {
+        log(
+          'TagPage renderedResult is empty'
         );
 
-        /*
-         * A new tag has no ID yet, therefore relations cannot
-         * exist for it.
-         */
-        if (!tagId) {
-          return originalElement;
-        }
+        return renderedResult;
+      }
 
-        /*
-         * The important part:
-         *
-         * TagPage itself contains TagEditPanel internally.
-         * We cannot patch TagEditPanel directly because it isn't
-         * registered through PatchComponent.
-         *
-         * Instead we render our control immediately after the
-         * original TagPage and use CSS to place it into the same
-         * visual edit area.
-         */
-        return createElement(
-          Fragment,
-          null,
 
-          originalElement,
+      var tag =
+        props &&
+        props.tag;
 
-          createElement(
-            'div',
-            {
-              className:
-                'tag-relations-edit-integration'
-            },
+      var tagId =
+        tag &&
+        tag.id;
 
-            createElement(
-              'button',
-              {
-                type: 'button',
 
-                className:
-                  'btn btn-secondary tag-relations-edit-button',
+      log(
+        'TagPage after:',
+        'tagId=' + tagId
+      );
 
-                onClick: function () {
-                  setShowRelations(function (value) {
-                    return !value;
-                  });
-                }
-              },
 
-              showRelations
-                ? 'Hide Tag Relations'
-                : 'Tag Relations'
-            ),
-
-            showRelations &&
-              createElement(
-                'div',
-                {
-                  className:
-                    'tag-relations-edit-panel-wrapper'
-                },
-
-                createElement(
-                  RelatedTagsPanel,
-                  {
-                    tagId: String(tagId)
-                  }
-                )
-              )
-          )
+      /*
+       * Walk the ACTUAL rendered React tree.
+       */
+      var patchedResult =
+        patchTagEditPanelTree(
+          renderedResult
         );
-      };
+
+
+      return patchedResult;
     }
   );
 
-  log('TagPage patch registered');
+
+  log(
+    'TagPage after patch registered'
+  );
+
 } catch (error) {
   logError(
-    'Failed to register TagPage patch:',
+    'Failed to register TagPage after patch:',
     error
   );
 }
+
 
 log('loaded');
 })();
