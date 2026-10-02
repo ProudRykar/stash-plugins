@@ -1,3 +1,4 @@
+import logging
 from backend.db.repository import RelationRepository
 from backend.config import Config
 

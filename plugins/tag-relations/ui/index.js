@@ -1,0 +1,595 @@
+(function () {
+  'use strict';
+
+  const PLUGIN_ID = 'stash-tag-relations';
+
+  function log() {
+    console.log('[Tag Relations]', ...arguments);
+  }
+
+  function logError() {
+    console.error('[Tag Relations]', ...arguments);
+  }
+
+  async function runPluginOperation(operation, args) {
+    const query = `
+      mutation($id: ID!, $args: Map) {
+        runPluginOperation(plugin_id: $id, args: $args)
+      }
+    `;
+
+    const variables = {
+      id: PLUGIN_ID,
+      args: Object.assign({ operation: operation }, args || {})
+    };
+
+    try {
+      const response = await fetch('/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ query: query, variables: variables })
+      });
+
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors.map(function(e) { return e.message; }).join(', '));
+      }
+
+      const data = result.data.runPluginOperation;
+
+      if (!data.ok) {
+        throw new Error(data.error?.message || 'Operation failed');
+      }
+
+      return data.data;
+    } catch (error) {
+      logError('Plugin operation failed:', operation, error);
+      throw error;
+    }
+  }
+
+  const React = window.PluginApi.React;
+  const createElement = React.createElement;
+  const useState = React.useState;
+  const useEffect = React.useEffect;
+  const useRef = React.useRef;
+  const Fragment = React.Fragment;
+
+  function RelationRow(_ref) {
+    var tag = _ref.tag;
+    var relationType = _ref.relationType;
+    var sourceTagId = _ref.sourceTagId;
+    var onDelete = _ref.onDelete;
+
+    var handleDelete = function () {
+      if (!window.confirm('Remove ' + relationType + ' relation to "' + tag.name + '"?')) return;
+
+      runPluginOperation('delete_relation', {
+        tag_a_id: sourceTagId,
+        tag_b_id: tag.id,
+        relation_type: relationType
+      }).then(function () {
+        onDelete();
+      }).catch(function (error) {
+        logError('Failed to delete relation:', error);
+        alert('Failed to delete relation');
+      });
+    };
+
+    return createElement(
+      'div',
+      { className: 'relation-row' },
+      createElement('span', { className: 'relation-tag-name' }, tag.name),
+      createElement('span', { className: 'relation-type-badge ' + relationType }, relationType),
+      createElement('button', { className: 'relation-delete-btn', onClick: handleDelete, title: 'Remove relation' }, '×')
+    );
+  }
+
+  function AddRelationModal(_ref2) {
+    var sourceTagId = _ref2.sourceTagId;
+    var relationType = _ref2.relationType;
+    var onClose = _ref2.onClose;
+    var onAdd = _ref2.onAdd;
+
+    var _useState = useState('');
+    var search = _useState[0];
+    var setSearch = _useState[1];
+
+    var _useState2 = useState([]);
+    var results = _useState2[0];
+    var setResults = _useState2[1];
+
+    var _useState3 = useState(false);
+    var loading = _useState3[0];
+    var setLoading = _useState3[1];
+
+    var _useState4 = useState(0);
+    var selectedIndex = _useState4[0];
+    var setSelectedIndex = _useState4[1];
+
+    var inputRef = useRef(null);
+
+    useEffect(function () {
+      if (inputRef.current) inputRef.current.focus();
+    }, []);
+
+    useEffect(function () {
+      var debounce = setTimeout(function () {
+        if (search.trim().length >= 2) {
+          doSearch();
+        } else {
+          setResults([]);
+        }
+      }, 300);
+      return function () { return clearTimeout(debounce); };
+    }, [search]);
+
+    var doSearch = function () {
+      setLoading(true);
+      runPluginOperation('find_tags', { search: search.trim(), per_page: 20 }).then(function (data) {
+        setResults(data.filter(function (t) { return t.id !== sourceTagId; }));
+        setSelectedIndex(0);
+      }).catch(function (error) {
+        logError('Search failed:', error);
+      }).finally(function () {
+        setLoading(false);
+      });
+    };
+
+    var handleKeyDown = function (e) {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(function (prev) { return Math.min(prev + 1, results.length - 1); });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(function (prev) { return Math.max(prev - 1, 0); });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (results[selectedIndex]) {
+          onAdd(results[selectedIndex].id, relationType);
+        }
+      }
+    };
+
+    var title = relationType.charAt(0).toUpperCase() + relationType.slice(1);
+
+    return createElement(
+      'div',
+      { className: 'modal-overlay', onClick: onClose },
+      createElement(
+        'div',
+        { className: 'modal', onClick: function (e) { return e.stopPropagation(); } },
+        createElement(
+          'div',
+          { className: 'modal-header' },
+          createElement('h3', null, 'Add ' + title + ' Tag'),
+          createElement('button', { className: 'modal-close', onClick: onClose }, '×')
+        ),
+        createElement(
+          'div',
+          { className: 'modal-body' },
+          createElement('input', {
+            ref: inputRef,
+            type: 'text',
+            value: search,
+            onChange: function (e) { return setSearch(e.target.value); },
+            onKeyDown: handleKeyDown,
+            placeholder: 'Search tags...',
+            className: 'modal-search-input'
+          }),
+          loading && createElement('div', { className: 'modal-loading' }, 'Searching...'),
+          createElement(
+            'ul',
+            { className: 'modal-results' },
+            results.map(function (tag, index) {
+              return createElement(
+                'li',
+                {
+                  key: tag.id,
+                  className: 'modal-result-item' + (index === selectedIndex ? ' selected' : ''),
+                  onClick: function () { return onAdd(tag.id, relationType); },
+                  onMouseEnter: function () { return setSelectedIndex(index); }
+                },
+                tag.name
+              );
+            }),
+            results.length === 0 && search.length >= 2 && !loading &&
+              createElement('li', { className: 'modal-no-results' }, 'No tags found')
+          )
+        ),
+        createElement(
+          'div',
+          { className: 'modal-footer' },
+          createElement('button', { className: 'btn btn-secondary', onClick: onClose }, 'Cancel')
+        )
+      )
+    );
+  }
+
+  function RelatedTagsPanel(_ref3) {
+    var tagId = _ref3.tagId;
+
+    var _useState5 = useState([]);
+    var similar = _useState5[0];
+    var setSimilar = _useState5[1];
+
+    var _useState6 = useState([]);
+    var related = _useState6[0];
+    var setRelated = _useState6[1];
+
+    var _useState7 = useState(false);
+    var loading = _useState7[0];
+    var setLoading = _useState7[1];
+
+    var _useState8 = useState(false);
+    var showAddModal = _useState8[0];
+    var setShowAddModal = _useState8[1];
+
+    var _useState9 = useState('similar');
+    var modalType = _useState9[0];
+    var setModalType = _useState9[1];
+
+    var numericTagId = tagId ? parseInt(tagId, 10) : null;
+
+    var loadRelations = function () {
+      if (!numericTagId) return;
+      setLoading(true);
+      runPluginOperation('list_relations', { tag_id: numericTagId }).then(function (data) {
+        setSimilar(data.similar || []);
+        setRelated(data.related || []);
+      }).catch(function (error) {
+        logError('Failed to load relations:', error);
+      }).finally(function () {
+        setLoading(false);
+      });
+    };
+
+    useEffect(function () {
+      if (numericTagId) {
+        loadRelations();
+      }
+    }, [numericTagId]);
+
+    var handleAddRelation = function (targetTagId, type) {
+      if (!numericTagId) return;
+      runPluginOperation('create_relation', {
+        tag_a_id: numericTagId,
+        tag_b_id: targetTagId,
+        relation_type: type
+      }).then(function () {
+        loadRelations();
+        setShowAddModal(false);
+      }).catch(function (error) {
+        logError('Failed to add relation:', error);
+        alert('Failed to add relation');
+      });
+    };
+
+    var handleDelete = function (deletedTagId, type) {
+      if (type === 'similar') {
+        setSimilar(function (prev) { return prev.filter(function (t) { return t.id !== deletedTagId; }); });
+      } else {
+        setRelated(function (prev) { return prev.filter(function (t) { return t.id !== deletedTagId; }); });
+      }
+    };
+
+    if (!numericTagId) {
+      return null;
+    }
+
+    return createElement(
+      'div',
+      { className: 'related-tags-panel' },
+      createElement('h3', null, 'Related Tags'),
+      createElement(
+        'div',
+        { className: 'relation-section' },
+        createElement(
+          'div',
+          { className: 'section-header' },
+          createElement('span', { className: 'section-title similar' }, 'Similar'),
+          createElement('button', { className: 'add-relation-btn', onClick: function () { setModalType('similar'); setShowAddModal(true); } }, '+ Add')
+        ),
+        loading ? createElement('div', { className: 'loading' }, 'Loading...') :
+        similar.length === 0 ? createElement('div', { className: 'empty-state' }, 'No similar tags') :
+        createElement(
+          'div',
+          { className: 'relation-list' },
+          similar.map(function (tag) {
+            return createElement(RelationRow, {
+              key: tag.id,
+              tag: tag,
+              relationType: 'similar',
+              sourceTagId: numericTagId,
+              onDelete: function () { return handleDelete(tag.id, 'similar'); }
+            });
+          })
+        )
+      ),
+      createElement(
+        'div',
+        { className: 'relation-section' },
+        createElement(
+          'div',
+          { className: 'section-header' },
+          createElement('span', { className: 'section-title related' }, 'Related'),
+          createElement('button', { className: 'add-relation-btn', onClick: function () { setModalType('related'); setShowAddModal(true); } }, '+ Add')
+        ),
+        loading ? createElement('div', { className: 'loading' }, 'Loading...') :
+        related.length === 0 ? createElement('div', { className: 'empty-state' }, 'No related tags') :
+        createElement(
+          'div',
+          { className: 'relation-list' },
+          related.map(function (tag) {
+            return createElement(RelationRow, {
+              key: tag.id,
+              tag: tag,
+              relationType: 'related',
+              sourceTagId: numericTagId,
+              onDelete: function () { return handleDelete(tag.id, 'related'); }
+            });
+          })
+        )
+      ),
+      showAddModal && createElement(AddRelationModal, {
+        sourceTagId: numericTagId,
+        relationType: modalType,
+        onClose: function () { return setShowAddModal(false); },
+        onAdd: handleAddRelation
+      })
+    );
+  }
+
+  function TagRelationsPage() {
+    var _useState10 = useState([]);
+    var relations = _useState10[0];
+    var setRelations = _useState10[1];
+
+    var _useState11 = useState([]);
+    var filteredRelations = _useState11[0];
+    var setFilteredRelations = _useState11[1];
+
+    var _useState12 = useState('');
+    var search = _useState12[0];
+    var setSearch = _useState12[1];
+
+    var _useState13 = useState('all');
+    var filter = _useState13[0];
+    var setFilter = _useState13[1];
+
+    var _useState14 = useState(false);
+    var loading = _useState14[0];
+    var setLoading = _useState14[1];
+
+    var _useState15 = useState({
+      total_relations: 0,
+      similar_count: 0,
+      related_count: 0,
+      tags_with_relations: 0
+    });
+    var stats = _useState15[0];
+    var setStats = _useState15[1];
+
+    var _useState16 = useState(false);
+    var showExport = _useState16[0];
+    var setShowExport = _useState16[1];
+
+    var _useState17 = useState('');
+    var exportData = _useState17[0];
+    var setExportData = _useState17[1];
+
+    var loadAll = function () {
+      setLoading(true);
+      Promise.all([
+        runPluginOperation('export_relations'),
+        runPluginOperation('get_stats')
+      ]).then(function (_ref4) {
+        var relsResult = _ref4[0];
+        var statsResult = _ref4[1];
+
+        if (relsResult && relsResult.relations) {
+          var rels = relsResult.relations.map(function (r) {
+            return {
+              tag_a: { id: r.tag_a_id, name: '' },
+              tag_b: { id: r.tag_b_id, name: '' },
+              type: r.relation_type
+            };
+          });
+          setRelations(rels);
+          applyFilters(rels);
+        }
+        if (statsResult) {
+          setStats(statsResult);
+        }
+      }).catch(function (error) {
+        logError('Failed to load:', error);
+      }).finally(function () {
+        setLoading(false);
+      });
+    };
+
+    useEffect(function () {
+      loadAll();
+    }, []);
+
+    var applyFilters = function (rels) {
+      var filtered = rels;
+      if (filter !== 'all') {
+        filtered = filtered.filter(function (r) { return r.type === filter; });
+      }
+      if (search.trim()) {
+        var term = search.toLowerCase();
+        filtered = filtered.filter(function (r) {
+          return r.tag_a.name.toLowerCase().includes(term) || r.tag_b.name.toLowerCase().includes(term);
+        });
+      }
+      setFilteredRelations(filtered);
+    };
+
+    useEffect(function () {
+      applyFilters(relations);
+    }, [search, filter, relations]);
+
+    var handleExport = function () {
+      runPluginOperation('export_relations').then(function (data) {
+        if (data) {
+          setExportData(JSON.stringify(data, null, 2));
+          setShowExport(true);
+        }
+      }).catch(function (error) {
+        logError('Export failed:', error);
+      });
+    };
+
+    var handleImport = function (file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var data = JSON.parse(e.target.result);
+          runPluginOperation('import_relations', {
+            relations: data.relations || [],
+            overwrite: false
+          }).then(function (result) {
+            alert('Imported ' + result.imported_count + ' relations');
+            loadAll();
+          }).catch(function (error) {
+            logError('Import failed:', error);
+            alert('Import failed');
+          });
+        } catch (error) {
+          logError('Import failed:', error);
+          alert('Import failed');
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    var handleValidate = function () {
+      runPluginOperation('validate_relations').then(function (data) {
+        if (data) {
+          alert('Valid: ' + data.valid_count + '\nBroken: ' + data.broken_count);
+          if (data.broken_count > 0) {
+            if (window.confirm('Remove broken relations?')) {
+              runPluginOperation('remove_broken_relations').then(function (result) {
+                alert('Removed ' + result.removed_count + ' broken relations');
+                loadAll();
+              });
+            }
+          }
+        }
+      }).catch(function (error) {
+        logError('Validate failed:', error);
+      });
+    };
+
+    return createElement(
+      'div',
+      { className: 'tag-relations-page' },
+      createElement(
+        'div',
+        { className: 'page-header' },
+        createElement('h2', null, 'Tag Relations'),
+        createElement(
+          'div',
+          { className: 'page-actions' },
+          createElement('button', { className: 'btn btn-primary', onClick: handleExport }, 'Export JSON'),
+          createElement('input', {
+            type: 'file',
+            accept: '.json',
+            onChange: function (e) { return e.target.files[0] && handleImport(e.target.files[0]); },
+            className: 'file-input',
+            id: 'import-file',
+            style: { display: 'none' }
+          }),
+          createElement('label', { htmlFor: 'import-file', className: 'btn btn-secondary' }, 'Import JSON'),
+          createElement('button', { className: 'btn btn-secondary', onClick: handleValidate }, 'Validate')
+        )
+      ),
+      createElement(
+        'div',
+        { className: 'stats-bar' },
+        createElement('div', { className: 'stat' }, 'Total: ' + stats.total_relations),
+        createElement('div', { className: 'stat similar' }, 'Similar: ' + stats.similar_count),
+        createElement('div', { className: 'stat related' }, 'Related: ' + stats.related_count),
+        createElement('div', { className: 'stat' }, 'Tags: ' + stats.tags_with_relations)
+      ),
+      createElement(
+        'div',
+        { className: 'filters' },
+        createElement('input', {
+          type: 'text',
+          value: search,
+          onChange: function (e) { return setSearch(e.target.value); },
+          placeholder: 'Search tags...',
+          className: 'search-input'
+        }),
+        createElement(
+          'select',
+          { value: filter, onChange: function (e) { return setFilter(e.target.value); }, className: 'filter-select' },
+          createElement('option', { value: 'all' }, 'All'),
+          createElement('option', { value: 'similar' }, 'Similar'),
+          createElement('option', { value: 'related' }, 'Related')
+        )
+      ),
+      loading ? createElement('div', { className: 'loading' }, 'Loading relations...') :
+      filteredRelations.length === 0 ? createElement('div', { className: 'empty-state' }, 'No relations found') :
+      createElement(
+        'div',
+        { className: 'relations-grid' },
+        filteredRelations.map(function (rel, index) {
+          return createElement(
+            'div',
+            { key: index, className: 'relation-card ' + rel.type },
+            createElement(
+              'div',
+              { className: 'relation-pair' },
+              createElement('span', { className: 'tag-name' }, rel.tag_a.name || 'Tag #' + rel.tag_a.id),
+              createElement('span', { className: 'relation-arrow ' + rel.type }, rel.type === 'similar' ? '≈' : '∼'),
+              createElement('span', { className: 'tag-name' }, rel.tag_b.name || 'Tag #' + rel.tag_b.id)
+            ),
+            createElement('span', { className: 'type-badge ' + rel.type }, rel.type)
+          );
+        })
+      ),
+      showExport && createElement(
+        'div',
+        { className: 'modal-overlay', onClick: function () { return setShowExport(false); } },
+        createElement(
+          'div',
+          { className: 'modal modal-large', onClick: function (e) { return e.stopPropagation(); } },
+          createElement(
+            'div',
+            { className: 'modal-header' },
+            createElement('h3', null, 'Export Relations (JSON)'),
+            createElement('button', { className: 'modal-close', onClick: function () { return setShowExport(false); } }, '×')
+          ),
+          createElement(
+            'div',
+            { className: 'modal-body' },
+            createElement('textarea', {
+              value: exportData,
+              readOnly: true,
+              className: 'export-textarea',
+              onClick: function (e) { return e.target.select(); }
+            }),
+            createElement('button', { className: 'btn btn-primary', onClick: function () { return navigator.clipboard.writeText(exportData); } }, 'Copy to Clipboard')
+          )
+        )
+      )
+    );
+  }
+
+  window.PluginApi.register.route('/plugin/tag-relations', TagRelationsPage);
+
+  log('loaded');
+})();
