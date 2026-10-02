@@ -468,3 +468,17 @@
   box-sizing: border-box;
   margin-bottom: 0.75rem;
 }
+
+.tag-relations-edit-controls {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.tag-relations-edit-button {
+  display: inline-block;
+}
+
+.tag-relations-edit-panel-wrapper {
+  width: 100%;
+  margin-top: 1rem;
+}
