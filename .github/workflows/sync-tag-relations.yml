@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ProudRykar/tag-relations
-          ref: develop
+          ref: main
           path: tag-relations-source
           fetch-depth: 1
 
