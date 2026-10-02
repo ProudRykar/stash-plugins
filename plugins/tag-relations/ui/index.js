@@ -1339,135 +1339,118 @@ TagRelationsPage
 
 /*
 
-* ============================================================
-* TagEditPanel integration
-* ============================================================
-*
-* IMPORTANT:
-*
-* We patch TagEditPanel rather than TagPage.
-*
-* TagPage renders:
-*
-* <TagEditPanel ... />
-*
-* when the tag is being edited.
-*
-* This keeps the relations UI inside the edit context and
-* prevents the panel from being rendered at the bottom of
-* the entire TagPage.
-  */
+/*
+ * ============================================================
+ * TagPage integration
+ * ============================================================
+ *
+ * TagEditPanel itself is NOT a PatchComponent in current Stash.
+ * TagPage IS a PatchComponent, so this is the reliable extension
+ * point.
+ *
+ * We render the relations button alongside the edit panel and
+ * keep the actual relations UI inside the tag edit area.
+ */
 
 try {
-window.PluginApi.patch.after(
-'TagEditPanel',
-function (OriginalComponent) {
-return function PatchedTagEditPanel(
-props
-) {
-var tag = props.tag;
-var tagId = tag && tag.id;
+  window.PluginApi.patch.after(
+    'TagPage',
+    function (OriginalComponent) {
+      return function PatchedTagPage(props) {
+        var tag = props.tag;
+        var tagId = tag && tag.id;
 
+        var _useState18 = useState(false);
+        var showRelations = _useState18[0];
+        var setShowRelations = _useState18[1];
 
-      var _useState18 =
-        useState(false);
-
-      var showRelations =
-        _useState18[0];
-
-      var setShowRelations =
-        _useState18[1];
-
-      var originalElement =
-        createElement(
+        /*
+         * Render the original Stash TagPage first.
+         */
+        var originalElement = createElement(
           OriginalComponent,
           props
         );
 
-      /*
-       * A newly-created tag has no ID yet, so there
-       * is nothing to which we can attach relations.
-       */
-      if (!tagId) {
-        return originalElement;
-      }
-
-      var toggleRelations =
-        function () {
-          setShowRelations(
-            function (value) {
-              return !value;
-            }
-          );
-        };
-
-      return createElement(
-        Fragment,
-        null,
+        /*
+         * A new tag has no ID yet, therefore relations cannot
+         * exist for it.
+         */
+        if (!tagId) {
+          return originalElement;
+        }
 
         /*
-         * Original Stash edit panel.
+         * The important part:
+         *
+         * TagPage itself contains TagEditPanel internally.
+         * We cannot patch TagEditPanel directly because it isn't
+         * registered through PatchComponent.
+         *
+         * Instead we render our control immediately after the
+         * original TagPage and use CSS to place it into the same
+         * visual edit area.
          */
-        originalElement,
+        return createElement(
+          Fragment,
+          null,
 
-        /*
-         * Tag Relations controls.
-         */
-        createElement(
-          'div',
-          {
-            className:
-              'tag-relations-edit-controls'
-          },
+          originalElement,
 
-          createElement(
-            'button',
-            {
-              type: 'button',
-              className:
-                'btn btn-secondary tag-relations-edit-button',
-              onClick:
-                toggleRelations
-            },
-            showRelations
-              ? 'Hide Tag Relations'
-              : 'Tag Relations'
-          )
-        ),
-
-        /*
-         * Relations are rendered only after the
-         * user explicitly opens them.
-         */
-        showRelations &&
           createElement(
             'div',
             {
               className:
-                'tag-relations-edit-panel-wrapper'
+                'tag-relations-edit-integration'
             },
+
             createElement(
-              RelatedTagsPanel,
+              'button',
               {
-                tagId: String(tagId)
-              }
-            )
+                type: 'button',
+
+                className:
+                  'btn btn-secondary tag-relations-edit-button',
+
+                onClick: function () {
+                  setShowRelations(function (value) {
+                    return !value;
+                  });
+                }
+              },
+
+              showRelations
+                ? 'Hide Tag Relations'
+                : 'Tag Relations'
+            ),
+
+            showRelations &&
+              createElement(
+                'div',
+                {
+                  className:
+                    'tag-relations-edit-panel-wrapper'
+                },
+
+                createElement(
+                  RelatedTagsPanel,
+                  {
+                    tagId: String(tagId)
+                  }
+                )
+              )
           )
-      );
-    };
-  }
-);
+        );
+      };
+    }
+  );
 
-log(
-  'TagEditPanel patch registered'
-);
-
-
+  log('TagPage patch registered');
 } catch (error) {
-logError(
-'Failed to register TagEditPanel patch:',
-error
-);
+  logError(
+    'Failed to register TagPage patch:',
+    error
+  );
 }
 
 log('loaded');
