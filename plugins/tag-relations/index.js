@@ -4,6 +4,8 @@
   const PLUGIN_ID = 'tag-relations';
 
   const INLINE_ITEM_CLASS = 'tag-relations-inline-item';
+  const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
+
   const EDIT_FIELDS_MARKER = 'data-tag-relations-fields';
   const SAVE_PATCH_MARKER = 'data-tag-relations-save-patched';
 
@@ -100,18 +102,13 @@
     if (
       data &&
       typeof data === 'object' &&
-      Object.prototype.hasOwnProperty.call(
-        data,
-        'ok'
-      )
+      Object.prototype.hasOwnProperty.call(data, 'ok')
     ) {
       if (!data.ok) {
         let message = 'Operation failed';
 
         if (data.error) {
-          if (
-            typeof data.error === 'object'
-          ) {
+          if (typeof data.error === 'object') {
             message =
               data.error.message ||
               message;
@@ -123,7 +120,40 @@
         throw new Error(message);
       }
 
-      return data.data;
+      /*
+       * Backend returns:
+       *
+       * {
+       *   ok: true,
+       *   error: null,
+       *   output: {...}
+       * }
+       *
+       * The actual plugin result is in `output`.
+       */
+      if (
+        Object.prototype.hasOwnProperty.call(
+          data,
+          'output'
+        )
+      ) {
+        return data.output;
+      }
+
+      /*
+       * Backwards compatibility with the old
+       * `{ ok: true, data: ... }` shape.
+       */
+      if (
+        Object.prototype.hasOwnProperty.call(
+          data,
+          'data'
+        )
+      ) {
+        return data.data;
+      }
+
+      return null;
     }
 
     return data;
@@ -152,6 +182,7 @@
 
   const createElement = React.createElement;
   const Fragment = React.Fragment;
+
   const useState = React.useState;
   const useEffect = React.useEffect;
 
@@ -166,7 +197,8 @@
       return null;
     }
 
-    const component = components.TagIDSelect;
+    const component =
+      components.TagIDSelect;
 
     if (
       typeof component !== 'function' &&
@@ -204,9 +236,9 @@
       const root =
         ReactDOM.createRoot(container);
 
-      root.render(element);
-
       container.__tagRelationsRoot = root;
+
+      root.render(element);
 
       return root;
     }
@@ -322,17 +354,22 @@
         });
     }
 
-    if (!data || typeof data !== 'object') {
+    if (
+      !data ||
+      typeof data !== 'object'
+    ) {
       return [];
     }
 
-    const similar = Array.isArray(data.similar)
-      ? data.similar
-      : [];
+    const similar =
+      Array.isArray(data.similar)
+        ? data.similar
+        : [];
 
-    const related = Array.isArray(data.related)
-      ? data.related
-      : [];
+    const related =
+      Array.isArray(data.related)
+        ? data.related
+        : [];
 
     const result = [];
     const seen = new Set();
@@ -363,7 +400,9 @@
         });
       });
 
-    return result;
+    return result.filter(function (tag) {
+      return Number.isFinite(tag.id);
+    });
   }
 
   // ============================================================
@@ -438,8 +477,18 @@
   function RelatedTagsSelect(props) {
     const tagId = Number(props.tagId);
 
-    const state =
-      useState(props.initialIds || []);
+    const initialIds =
+      Array.isArray(props.initialIds)
+        ? props.initialIds
+            .map(function (id) {
+              return Number(id);
+            })
+            .filter(function (id) {
+              return Number.isFinite(id);
+            })
+        : [];
+
+    const state = useState(initialIds);
 
     const selectedIds = state[0];
     const setSelectedIds = state[1];
@@ -459,14 +508,10 @@
     );
 
     function handleSelect(tags) {
-      /*
-       * Native TagIDSelect returns Tag objects.
-       *
-       * We keep only their numeric IDs.
-       */
-      const values = Array.isArray(tags)
-        ? tags
-        : [];
+      const values =
+        Array.isArray(tags)
+          ? tags
+          : [];
 
       const uniqueIds = [];
       const seen = new Set();
@@ -482,9 +527,6 @@
           return;
         }
 
-        /*
-         * A tag must never be related to itself.
-         */
         if (id === tagId) {
           return;
         }
@@ -519,19 +561,21 @@
     /*
      * IMPORTANT:
      *
-     * TagIDSelect is Stash's own wrapper around
-     * TagSelect/GroupSelect. Do not pass react-select
-     * props such as isMulti/isClearable/excludeIds.
+     * TagIDSelect is the native Stash selector.
      *
-     * TagIDSelect already knows that it is selecting
-     * tag IDs and handles the native Stash selector.
+     * `isMulti: true` is required because the
+     * default is single-select.
      */
     return createElement(
       TagIDSelect,
       {
-        ids: selectedIds.map(function (id) {
-          return String(id);
-        }),
+        ids: selectedIds.map(
+          function (id) {
+            return String(id);
+          }
+        ),
+
+        isMulti: true,
 
         onSelect: handleSelect,
       }
@@ -543,7 +587,7 @@
   // ============================================================
 
   function RelationEditFields(props) {
-    const tagId = props.tagId;
+    const tagId = Number(props.tagId);
 
     const relationsState =
       useState(null);
@@ -582,12 +626,10 @@
           );
 
         /*
-         * null means "not loaded yet".
-         * [] means "loaded and there are no relations".
+         * null = not loaded.
+         * []   = loaded and empty.
          */
-        if (
-          Array.isArray(existing)
-        ) {
+        if (Array.isArray(existing)) {
           setRelations(
             existing.map(function (id) {
               return Number(id);
@@ -611,9 +653,13 @@
             }
 
             const ids =
-              tags.map(function (tag) {
-                return Number(tag.id);
-              });
+              tags
+                .map(function (tag) {
+                  return Number(tag.id);
+                })
+                .filter(function (id) {
+                  return Number.isFinite(id);
+                });
 
             setRelations(ids);
 
@@ -711,7 +757,7 @@
   // ============================================================
 
   function RelatedTagsInline(props) {
-    const tagId = props.tagId;
+    const tagId = Number(props.tagId);
 
     const state =
       useState(null);
@@ -760,10 +806,6 @@
     );
 
     if (error) {
-      /*
-       * The normal tag page should not show
-       * backend errors directly.
-       */
       return null;
     }
 
@@ -835,10 +877,13 @@
       );
 
     if (item) {
-      if (
+      const existingTagId =
         item.getAttribute(
           'data-tag-id'
-        ) === String(tagId)
+        );
+
+      if (
+        existingTagId === String(tagId)
       ) {
         return;
       }
@@ -895,6 +940,7 @@
     );
 
     value.appendChild(mount);
+
     item.appendChild(title);
     item.appendChild(value);
 
@@ -946,6 +992,42 @@
   // Edit view
   // ============================================================
 
+  function removeDuplicateEditFields(form) {
+    const containers =
+      Array.from(
+        form.querySelectorAll(
+          '.' +
+            EDIT_FIELDS_CLASS +
+            '[' +
+            EDIT_FIELDS_MARKER +
+            '="true"]'
+        )
+      );
+
+    if (containers.length <= 1) {
+      return containers[0] || null;
+    }
+
+    /*
+     * Keep the first container.
+     * Destroy all duplicate React roots.
+     */
+    const keeper = containers[0];
+
+    containers
+      .slice(1)
+      .forEach(function (element) {
+        log(
+          'Removing duplicate edit container'
+        );
+
+        unmountReact(element);
+        element.remove();
+      });
+
+    return keeper;
+  }
+
   function installEditFields(tagId) {
     const form =
       document.querySelector(
@@ -956,58 +1038,69 @@
       return;
     }
 
-    if (
-      form.hasAttribute(
-        EDIT_FIELDS_MARKER
-      )
-    ) {
-      return;
+    /*
+     * IMPORTANT:
+     *
+     * The marker belongs to the container,
+     * not the form.
+     *
+     * Therefore we must search INSIDE the form.
+     */
+    let fieldsContainer =
+      removeDuplicateEditFields(form);
+
+    if (!fieldsContainer) {
+      fieldsContainer =
+        document.createElement('div');
+
+      fieldsContainer.className =
+        EDIT_FIELDS_CLASS;
+
+      fieldsContainer.setAttribute(
+        EDIT_FIELDS_MARKER,
+        'true'
+      );
+
+      form.appendChild(
+        fieldsContainer
+      );
     }
 
-    const fieldsContainer =
-      document.createElement('div');
+    const key = String(tagId);
 
-    fieldsContainer.className =
-      'tag-relations-edit-fields';
-
-    fieldsContainer.setAttribute(
-      EDIT_FIELDS_MARKER,
-      'true'
-    );
-
-    form.appendChild(
-      fieldsContainer
-    );
-
-    if (
-      !editStates.has(
-        String(tagId)
-      )
-    ) {
+    if (!editStates.has(key)) {
       editStates.set(
-        String(tagId),
+        key,
         null
       );
     }
 
-    try {
-      mountReact(
-        fieldsContainer,
-        createElement(
-          RelationEditFields,
-          {
-            tagId: tagId,
-          }
-        )
-      );
-    } catch (error) {
-      logError(
-        'Failed to mount relation edit fields:',
-        error
-      );
+    /*
+     * Do not mount another React root into an
+     * already mounted container.
+     */
+    if (!fieldsContainer.__tagRelationsRoot) {
+      try {
+        mountReact(
+          fieldsContainer,
+          createElement(
+            RelationEditFields,
+            {
+              tagId: tagId,
+            }
+          )
+        );
+      } catch (error) {
+        logError(
+          'Failed to mount relation edit fields:',
+          error
+        );
 
-      fieldsContainer.remove();
-      return;
+        unmountReact(fieldsContainer);
+        fieldsContainer.remove();
+
+        return;
+      }
     }
 
     patchSaveButton(
@@ -1039,21 +1132,41 @@
       return;
     }
 
+    /*
+     * If the button already belongs to this exact
+     * form/tag, do nothing.
+     */
+    const patchedForm =
+      saveButton.__tagRelationsForm;
+
+    const patchedTagId =
+      saveButton.__tagRelationsTagId;
+
     if (
-      saveButton.hasAttribute(
-        SAVE_PATCH_MARKER
-      )
+      patchedForm === form &&
+      patchedTagId === Number(tagId)
     ) {
       return;
     }
 
-    saveButton.setAttribute(
-      SAVE_PATCH_MARKER,
-      'true'
-    );
+    /*
+     * Remove an old plugin listener if Stash replaced
+     * the edit form/button.
+     */
+    if (
+      saveButton.__tagRelationsSaveHandler
+    ) {
+      saveButton.removeEventListener(
+        'click',
+        saveButton.__tagRelationsSaveHandler,
+        true
+      );
 
-    saveButton.addEventListener(
-      'click',
+      saveButton.__tagRelationsSaveHandler =
+        null;
+    }
+
+    const handler =
       function () {
         const key =
           String(tagId);
@@ -1082,12 +1195,30 @@
             });
 
         waitForNativeSave(
-          tagId,
+          Number(tagId),
           form,
           relationIds
         );
-      },
+      };
+
+    saveButton.addEventListener(
+      'click',
+      handler,
       true
+    );
+
+    saveButton.__tagRelationsSaveHandler =
+      handler;
+
+    saveButton.__tagRelationsForm =
+      form;
+
+    saveButton.__tagRelationsTagId =
+      Number(tagId);
+
+    saveButton.setAttribute(
+      SAVE_PATCH_MARKER,
+      'true'
     );
   }
 
@@ -1096,6 +1227,17 @@
     form,
     relationIds
   ) {
+    /*
+     * Prevent duplicate synchronization if the user
+     * somehow causes multiple click handlers.
+     */
+    if (form.__tagRelationsSaveWaiting) {
+      return;
+    }
+
+    form.__tagRelationsSaveWaiting =
+      true;
+
     const started =
       Date.now();
 
@@ -1103,13 +1245,23 @@
       15000;
 
     function check() {
-      const stillInDOM =
-        form.isConnected &&
+      const currentForm =
         document.querySelector(
           '#tag-page #tag-edit'
-        ) === form;
+        );
 
+      const stillInDOM =
+        form.isConnected &&
+        currentForm === form;
+
+      /*
+       * Native Stash save normally causes the edit form
+       * to disappear/re-render.
+       */
       if (!stillInDOM) {
+        form.__tagRelationsSaveWaiting =
+          false;
+
         syncRelationsAfterNativeSave(
           tagId,
           relationIds
@@ -1122,6 +1274,9 @@
         Date.now() - started >=
         timeout
       ) {
+        form.__tagRelationsSaveWaiting =
+          false;
+
         log(
           'Native save did not finish within timeout; ' +
             'relations were not synchronized'
@@ -1161,11 +1316,11 @@
           tag_id: Number(tagId),
 
           /*
-           * The UI exposes one relation concept:
+           * The UI exposes a single relation concept:
            * "related".
            *
-           * Existing "similar" relations are
-           * therefore converted into "related".
+           * Therefore all selected IDs go into related_ids
+           * and existing "similar" relations are removed.
            */
           similar_ids: [],
           related_ids: relationIds,
@@ -1220,11 +1375,40 @@
 
     document
       .querySelectorAll(
-        '.tag-relations-edit-fields'
+        '.' + EDIT_FIELDS_CLASS
       )
       .forEach(function (element) {
         unmountReact(element);
         element.remove();
+      });
+
+    /*
+     * Remove our Save listener from any old button.
+     */
+    document
+      .querySelectorAll(
+        'button[' +
+          SAVE_PATCH_MARKER +
+          ']'
+      )
+      .forEach(function (button) {
+        if (
+          button.__tagRelationsSaveHandler
+        ) {
+          button.removeEventListener(
+            'click',
+            button.__tagRelationsSaveHandler,
+            true
+          );
+        }
+
+        delete button.__tagRelationsSaveHandler;
+        delete button.__tagRelationsForm;
+        delete button.__tagRelationsTagId;
+
+        button.removeAttribute(
+          SAVE_PATCH_MARKER
+        );
       });
 
     editStates.clear();
@@ -1239,7 +1423,9 @@
       getCurrentTagId();
 
     if (!tagId) {
-      if (currentTagId !== null) {
+      if (
+        currentTagId !== null
+      ) {
         cleanupPluginUI();
         currentTagId = null;
       }
@@ -1282,9 +1468,7 @@
   // ============================================================
 
   function installRouteListener() {
-    if (
-      routeListenerInstalled
-    ) {
+    if (routeListenerInstalled) {
       return;
     }
 
@@ -1296,9 +1480,18 @@
       PluginApi.Event.addEventListener(
         'stash:location',
         function () {
+          /*
+           * Stash may need a render cycle before the
+           * tag page exists in the DOM.
+           */
           setTimeout(
             scanTagPage,
             0
+          );
+
+          setTimeout(
+            scanTagPage,
+            250
           );
         }
       );
@@ -1451,9 +1644,10 @@
   // ============================================================
 
   installRouteListener();
+
   startEditModePolling();
+
   scanTagPage();
 
   log('loaded');
 })();
-
