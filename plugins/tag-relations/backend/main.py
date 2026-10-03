@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
+
+import os
 import sys
+
+# When Stash executes backend/main.py directly, Python puts
+# .../tag-relations/backend into sys.path instead of the
+# plugin root. Add the plugin root so `import backend.*` works.
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+if PLUGIN_ROOT not in sys.path:
+    sys.path.insert(0, PLUGIN_ROOT)
+
 import json
 import logging
-import os
 from typing import Any
 
 from backend.config import load_config
