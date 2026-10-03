@@ -842,6 +842,75 @@
   }
 
   // ============================================================
+  // PluginApi.patch.after callback helper
+  //
+  // Stash runs: result = afterFn(this, args.concat(result))
+  //
+  // React may pass extra arguments to the component besides
+  // props (e.g. a secondArg object). The render result is
+  // therefore ALWAYS the last argument, never a fixed index.
+  // ============================================================
+
+  function splitPatchArgs(args) {
+    const componentProps =
+      args.length ? args[0] : null;
+
+    let rendered = args.length
+      ? args[args.length - 1]
+      : null;
+
+    if (!React.isValidElement(rendered)) {
+      for (let i = args.length - 1; i >= 0; i--) {
+        if (React.isValidElement(args[i])) {
+          rendered = args[i];
+          break;
+        }
+      }
+    }
+
+    return {
+      componentProps: componentProps,
+      rendered: rendered,
+    };
+  }
+
+  function logPatchArgs(label, args) {
+    const parts = [];
+
+    for (let i = 0; i < args.length; i++) {
+      const value = args[i];
+
+      if (React.isValidElement(value)) {
+        parts.push('#' + i + ':<element>');
+      } else if (value === null) {
+        parts.push('#' + i + ':null');
+      } else if (value === undefined) {
+        parts.push('#' + i + ':undefined');
+      } else if (typeof value === 'object') {
+        parts.push(
+          '#' +
+            i +
+            ':object{' +
+            Object.keys(value).join(',') +
+            '}'
+        );
+      } else {
+        parts.push(
+          '#' + i + ':' + typeof value
+        );
+      }
+    }
+
+    logError(
+      label +
+        ' after-args(' +
+        args.length +
+        '): ' +
+        parts.join(' | ')
+    );
+  }
+
+  // ============================================================
   // ImageInput patch
   //
   // ImageInput is rendered from the native Stash edit tree.
@@ -853,23 +922,27 @@
     typeof PluginApi.patch.after ===
       'function'
   ) {
-    /*
-     * Stash calls after-fns as fn(...args, result).
-     * For a component that means fn(props, renderedElement).
-     */
     PluginApi.patch.after(
       'ImageInput',
-      function (componentProps, rendered) {
-        const element = React.isValidElement(rendered)
-          ? rendered
-          : null;
-
-        if (!element) {
-          logError(
-            'ImageInput patch received invalid render result:',
-            rendered
+      function () {
+        const args =
+          Array.prototype.slice.call(
+            arguments
           );
-          return rendered;
+
+        const split =
+          splitPatchArgs(args);
+
+        const componentProps =
+          split.componentProps;
+        const rendered = split.rendered;
+
+        if (!rendered) {
+          logPatchArgs(
+            'ImageInput patch:',
+            args
+          );
+          return null;
         }
 
         const tagId = getCurrentTagId();
@@ -881,7 +954,7 @@
         );
 
         if (!enabled) {
-          return element;
+          return rendered;
         }
 
         log(
@@ -892,7 +965,7 @@
         return createElement(
           Fragment,
           null,
-          element,
+          rendered,
           createElement(
             TagRelationsEditBridge,
             {
@@ -927,24 +1000,34 @@
   ) {
     PluginApi.patch.after(
       'TagPage',
-      function (componentProps, rendered) {
-        const element = React.isValidElement(rendered)
-          ? rendered
-          : null;
-
-        if (!element) {
-          logError(
-            'TagPage patch received invalid render result:',
-            rendered
+      function () {
+        const args =
+          Array.prototype.slice.call(
+            arguments
           );
-          return rendered;
+
+        const split =
+          splitPatchArgs(args);
+
+        const componentProps =
+          split.componentProps;
+        const rendered = split.rendered;
+
+        if (!rendered) {
+          logPatchArgs(
+            'TagPage patch:',
+            args
+          );
+          return null;
         }
 
-        const tag = componentProps && componentProps.tag;
+        const tag =
+          componentProps &&
+          componentProps.tag;
         const tagId = tag && tag.id;
 
         if (!tagId) {
-          return element;
+          return rendered;
         }
 
         log(
@@ -955,7 +1038,7 @@
         return createElement(
           Fragment,
           null,
-          element,
+          rendered,
           createElement(
             RelatedTagsInline,
             {
