@@ -4,6 +4,10 @@ version: 0.1.7
 url: https://github.com/ProudRykar/stash-plugins
 
 settings:
+  stash_url:
+    displayName: Stash URL
+    type: STRING
+
   database_path:
     displayName: Database path
     type: STRING

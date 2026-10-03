@@ -20,8 +20,12 @@ def load_config(plugin_dir: str, settings: dict | None = None) -> Config:
         db_path = str(data_dir / "tag-relations.sqlite")
 
     stash_url = settings.get("stash_url", "").strip()
+
     if not stash_url:
-        stash_url = "http://localhost:9999"
+        raise ConfigError(
+            "Stash URL is not configured. "
+            "Please configure 'stash_url' in plugin settings."
+        )
 
     api_key = settings.get("api_key", "").strip() or None
 
