@@ -853,29 +853,32 @@
     typeof PluginApi.patch.after ===
       'function'
   ) {
+    /*
+     * Stash calls after-fns as fn(...args, result).
+     * For a component that means fn(props, renderedElement).
+     */
     PluginApi.patch.after(
       'ImageInput',
-      function (original, props) {
-        // Handle both (element, props) and (props) signatures
-        const element = React.isValidElement(original) ? original : null;
-        const componentProps = element ? props : original;
+      function (componentProps, rendered) {
+        const element = React.isValidElement(rendered)
+          ? rendered
+          : null;
 
         if (!element) {
           logError(
-            'ImageInput patch received invalid React element, got:',
-            original
+            'ImageInput patch received invalid render result:',
+            rendered
           );
-          return original;
+          return rendered;
         }
 
         const tagId = getCurrentTagId();
 
-        const enabled =
-          !!(
-            tagId &&
-            componentProps &&
-            componentProps.isEditing === true
-          );
+        const enabled = !!(
+          tagId &&
+          componentProps &&
+          componentProps.isEditing === true
+        );
 
         if (!enabled) {
           return element;
@@ -924,16 +927,17 @@
   ) {
     PluginApi.patch.after(
       'TagPage',
-      function (original, props) {
-        const element = React.isValidElement(original) ? original : null;
-        const componentProps = element ? props : original;
+      function (componentProps, rendered) {
+        const element = React.isValidElement(rendered)
+          ? rendered
+          : null;
 
         if (!element) {
           logError(
-            'TagPage patch received invalid React element, got:',
-            original
+            'TagPage patch received invalid render result:',
+            rendered
           );
-          return original;
+          return rendered;
         }
 
         const tag = componentProps && componentProps.tag;
