@@ -219,10 +219,10 @@
     React.useEffect;
 
   // ============================================================
-  // Native Stash component
+  // Native Stash TagSelect
   // ============================================================
 
-  function getNativeTagIDSelect() {
+  function getNativeTagSelect() {
     const components =
       PluginApi.components;
 
@@ -231,13 +231,11 @@
     }
 
     const component =
-      components.TagIDSelect;
+      components.TagSelect;
 
     if (
-      typeof component !==
-        'function' &&
-      typeof component !==
-        'object'
+      typeof component !== 'function' &&
+      typeof component !== 'object'
     ) {
       return null;
     }
@@ -272,6 +270,129 @@
 
   function getTagUrl(tagId) {
     return '/tags/' + tagId;
+  }
+
+  // ============================================================
+  // Generic GraphQL
+  // ============================================================
+
+  async function graphql(
+    query,
+    variables
+  ) {
+    const response = await fetch(
+      '/graphql',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+        credentials:
+          'same-origin',
+        body: JSON.stringify({
+          query: query,
+          variables:
+            variables || {},
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        'GraphQL HTTP ' +
+          response.status +
+          ': ' +
+          response.statusText
+      );
+    }
+
+    const result =
+      await response.json();
+
+    if (result.errors) {
+      throw new Error(
+        result.errors
+          .map(function (error) {
+            return error.message;
+          })
+          .join(', ')
+      );
+    }
+
+    return result.data;
+  }
+
+  // ============================================================
+  // Load complete Tag objects
+  //
+  // TagSelect expects Tag objects in `values`.
+  //
+  // We intentionally do NOT use TagIDSelect here.
+  // ============================================================
+
+  async function loadTagsByIds(ids) {
+    const normalized =
+      normalizeIds(ids);
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const query = `
+      query FindTagsForTagRelations(
+        $ids: [ID!]
+      ) {
+        findTags(
+          ids: $ids
+        ) {
+          count
+          tags {
+            id
+            name
+            sort_name
+            favorite
+            description
+            aliases
+            image_path
+            parents {
+              id
+              name
+              sort_name
+            }
+            stash_ids {
+              endpoint
+              stash_id
+              updated_at
+            }
+          }
+        }
+      }
+    `;
+
+    const data =
+      await graphql(
+        query,
+        {
+          ids: normalized.map(
+            function (id) {
+              return String(id);
+            }
+          ),
+        }
+      );
+
+    if (
+      !data ||
+      !data.findTags ||
+      !Array.isArray(
+        data.findTags.tags
+      )
+    ) {
+      return [];
+    }
+
+    return data.findTags.tags;
   }
 
   // ============================================================
@@ -621,59 +742,185 @@
   //
   // IMPORTANT:
   //
-  // This component is rendered inside the existing
-  // Stash React tree.
+  // Uses native Stash TagSelect, NOT TagIDSelect.
   //
-  // Therefore TagIDSelect gets the existing Apollo context.
+  // Because this component is rendered through a React portal,
+  // TagSelect remains inside Stash's existing Apollo context.
   // ============================================================
 
   function RelatedTagsSelect(props) {
     const tagId =
       Number(props.tagId);
 
-    const state =
-      useState(
-        normalizeIds(
-          props.initialIds
-        )
-      );
+    const TagSelect =
+      getNativeTagSelect();
 
-    const selectedIds =
-      state[0];
+    const valuesState =
+      useState(null);
 
-    const setSelectedIds =
-      state[1];
+    const values =
+      valuesState[0];
 
-    const TagIDSelect =
-      getNativeTagIDSelect();
+    const setValues =
+      valuesState[1];
+
+    const loadingState =
+      useState(true);
+
+    const loading =
+      loadingState[0];
+
+    const setLoading =
+      loadingState[1];
+
+    const errorState =
+      useState(null);
+
+    const error =
+      errorState[0];
+
+    const setError =
+      errorState[1];
+
+    // ----------------------------------------------------------
+    // Load full Tag objects for initial IDs.
+    // ----------------------------------------------------------
 
     useEffect(
       function () {
-        if (!TagIDSelect) {
-          logError(
-            'TagIDSelect is unavailable'
-          );
-        }
+        let cancelled = false;
+
+        const ids =
+          normalizeIds(
+            props.initialIds
+          ).filter(function (id) {
+            return id !== tagId;
+          });
+
+        setLoading(true);
+        setError(null);
+
+        loadTagsByIds(ids)
+          .then(function (tags) {
+            if (cancelled) {
+              return;
+            }
+
+            setValues(tags);
+          })
+          .catch(function (loadError) {
+            if (cancelled) {
+              return;
+            }
+
+            logError(
+              'Failed to load Tag objects:',
+              loadError
+            );
+
+            setError(
+              loadError
+            );
+
+            setValues([]);
+          })
+          .finally(function () {
+            if (!cancelled) {
+              setLoading(false);
+            }
+          });
+
+        return function () {
+          cancelled = true;
+        };
       },
-      [TagIDSelect]
+      [
+        tagId,
+        JSON.stringify(
+          normalizeIds(
+            props.initialIds
+          )
+        ),
+      ]
     );
 
+    // ----------------------------------------------------------
+    // Native component unavailable.
+    // ----------------------------------------------------------
+
+    if (!TagSelect) {
+      return createElement(
+        'div',
+        {
+          className:
+            'tag-relations-native-select-error text-danger',
+        },
+        'Не удалось загрузить выбор тегов'
+      );
+    }
+
+    // ----------------------------------------------------------
+    // Loading initial values.
+    // ----------------------------------------------------------
+
+    if (loading) {
+      return createElement(
+        'div',
+        {
+          className:
+            'tag-relations-edit-loading',
+        },
+        'Загрузка связанных тегов...'
+      );
+    }
+
+    // ----------------------------------------------------------
+    // Initial loading error.
+    // ----------------------------------------------------------
+
+    if (error) {
+      return createElement(
+        'div',
+        {
+          className:
+            'tag-relations-edit-error text-danger',
+        },
+        'Не удалось загрузить связанные теги: ' +
+          error.message
+      );
+    }
+
+    // ----------------------------------------------------------
+    // Native TagSelect.
+    // ----------------------------------------------------------
+
     function handleSelect(tags) {
-      const values =
+      const selected =
         Array.isArray(tags)
           ? tags
           : [];
 
-      const ids =
-        normalizeIds(
-          values
-        ).filter(function (id) {
+      const filtered =
+        selected.filter(function (tag) {
+          if (
+            !tag ||
+            tag.id === undefined
+          ) {
+            return false;
+          }
+
           return (
-            id !== tagId
+            Number(tag.id) !==
+            tagId
           );
         });
 
-      setSelectedIds(ids);
+      setValues(filtered);
+
+      const ids =
+        normalizeIds(
+          filtered
+        );
 
       const key =
         String(tagId);
@@ -699,45 +946,39 @@
         dirty
       );
 
-      if (dirty) {
-        setTimeout(
-          function () {
+      setTimeout(
+        function () {
+          if (dirty) {
             updateSaveButton(
               tagId
             );
-          },
-          0
-        );
-      }
-    }
-
-    if (!TagIDSelect) {
-      return createElement(
-        'div',
-        {
-          className:
-            'tag-relations-native-select-error text-danger',
+          }
         },
-        'Не удалось загрузить выбор тегов'
+        0
       );
     }
 
     return createElement(
-      TagIDSelect,
+      TagSelect,
       {
-        ids:
-          selectedIds.map(
-            function (id) {
-              return String(id);
-            }
-          ),
-
         isMulti: true,
 
-        creatable: false,
+        values:
+          Array.isArray(values)
+            ? values
+            : [],
 
         onSelect:
           handleSelect,
+
+        excludeIds: [
+          tagId,
+        ],
+
+        creatable: false,
+
+        hoverPlacement:
+          'right',
       }
     );
   }
@@ -817,7 +1058,9 @@
                     return tag.id;
                   }
                 )
-              );
+              ).filter(function (id) {
+                return id !== tagId;
+              });
 
             editStates.set(
               key,
@@ -893,6 +1136,7 @@
       {
         className:
           'form-group row tag-relations-form-group',
+
         'data-field':
           'tag_relations',
       },
@@ -929,10 +1173,6 @@
 
   // ============================================================
   // Edit bridge
-  //
-  // This component itself lives inside Stash's React tree.
-  //
-  // The generated DOM node is only the portal destination.
   // ============================================================
 
   function TagRelationsEditBridge(
@@ -1120,9 +1360,7 @@
           return normalizeIds(
             ids
           ).filter(function (id) {
-            return (
-              id !== tagId
-            );
+            return id !== tagId;
           });
         }
 
@@ -1146,9 +1384,6 @@
 
             return;
           }
-
-          // Snapshot before Stash destroys/recreates
-          // the edit form.
 
           const relationIds =
             getCurrentIds();
@@ -1337,13 +1572,6 @@
 
   // ============================================================
   // Patch HeaderImage
-  //
-  // IMPORTANT:
-  //
-  // ImageInput was returning {} in this Stash build.
-  //
-  // HeaderImage is a documented patchable Stash component,
-  // and is inside the same React tree as the tag editor.
   // ============================================================
 
   function installHeaderImagePatch() {
@@ -1369,15 +1597,9 @@
         const tagId =
           getCurrentTagId();
 
-        // Only activate on a tag page.
-
         if (!tagId) {
           return original;
         }
-
-        // HeaderImage itself is used on the tag page,
-        // but we only need the bridge while the editor
-        // exists.
 
         const enabled =
           !!document.querySelector(
@@ -1387,10 +1609,6 @@
         if (!enabled) {
           return original;
         }
-
-        // If the Stash render result is somehow not a
-        // React element, don't put it into another React
-        // element. Preserve native result.
 
         if (
           !React.isValidElement(
@@ -1408,7 +1626,6 @@
         return createElement(
           Fragment,
           null,
-
           original,
 
           createElement(
@@ -1796,7 +2013,6 @@
       }
 
       currentTagId = null;
-
       return;
     }
 
@@ -1958,6 +2174,6 @@
   scanTagPage();
 
   log(
-    'loaded - using HeaderImage as React/Apollo bridge'
+    'loaded - using native TagSelect + HeaderImage React/Apollo bridge'
   );
 })();
