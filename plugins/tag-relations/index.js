@@ -595,10 +595,11 @@
      * tag selector.
      */
     return createElement(
-      'div',
-      null,
-      'TEST: relations = ',
-      JSON.stringify(selectedIds)
+      TagIDSelect,
+      {
+        ids: [],
+        onSelect: handleSelect,
+      }
     );
   }
 
