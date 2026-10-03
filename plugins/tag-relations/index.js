@@ -140,9 +140,7 @@
               data.error.message ||
               message;
           } else {
-            message = String(
-              data.error
-            );
+            message = String(data.error);
           }
         }
 
@@ -180,9 +178,7 @@
   const PluginApi = window.PluginApi;
 
   if (!PluginApi) {
-    logError(
-      'PluginApi is unavailable'
-    );
+    logError('PluginApi is unavailable');
     return;
   }
 
@@ -230,17 +226,17 @@
       return null;
     }
 
-    const component =
+    const TagSelect =
       components.TagSelect;
 
     if (
-      typeof component !== 'function' &&
-      typeof component !== 'object'
+      typeof TagSelect !== 'function' &&
+      typeof TagSelect !== 'object'
     ) {
       return null;
     }
 
-    return component;
+    return TagSelect;
   }
 
   // ============================================================
@@ -280,9 +276,8 @@
     query,
     variables
   ) {
-    const response = await fetch(
-      '/graphql',
-      {
+    const response =
+      await fetch('/graphql', {
         method: 'POST',
         headers: {
           'Content-Type':
@@ -295,8 +290,7 @@
           variables:
             variables || {},
         }),
-      }
-    );
+      });
 
     if (!response.ok) {
       throw new Error(
@@ -326,9 +320,11 @@
   // ============================================================
   // Load complete Tag objects
   //
-  // TagSelect expects Tag objects in `values`.
+  // IMPORTANT:
   //
-  // We intentionally do NOT use TagIDSelect here.
+  // TagSelect expects actual Tag objects in `values`.
+  //
+  // We deliberately do NOT use TagIDSelect.
   // ============================================================
 
   async function loadTagsByIds(ids) {
@@ -592,9 +588,7 @@
         return;
       }
 
-      if (
-        seen.has(numericId)
-      ) {
+      if (seen.has(numericId)) {
         return;
       }
 
@@ -679,7 +673,7 @@
   }
 
   // ============================================================
-  // Save relations
+  // Save relations after native save
   // ============================================================
 
   async function syncRelationsAfterNativeSave(
@@ -693,9 +687,7 @@
       normalizeIds(
         relationIds
       ).filter(function (id) {
-        return (
-          id !== Number(tagId)
-        );
+        return id !== Number(tagId);
       });
 
     log(
@@ -721,9 +713,7 @@
       );
 
       editStates.delete(key);
-      editInitialStates.delete(
-        key
-      );
+      editInitialStates.delete(key);
       editDirtyStates.delete(key);
 
       log(
@@ -740,12 +730,16 @@
   // ============================================================
   // Related Tags selector
   //
-  // IMPORTANT:
+  // NATIVE TagSelect ONLY.
   //
-  // Uses native Stash TagSelect, NOT TagIDSelect.
+  // TagSelect receives:
   //
-  // Because this component is rendered through a React portal,
-  // TagSelect remains inside Stash's existing Apollo context.
+  //   values: Tag[]
+  //
+  // and returns:
+  //
+  //   onSelect(Tag[])
+  //
   // ============================================================
 
   function RelatedTagsSelect(props) {
@@ -782,25 +776,25 @@
     const setError =
       errorState[1];
 
+    const initialIds =
+      normalizeIds(
+        props.initialIds
+      ).filter(function (id) {
+        return id !== tagId;
+      });
+
     // ----------------------------------------------------------
-    // Load full Tag objects for initial IDs.
+    // Load Tag objects
     // ----------------------------------------------------------
 
     useEffect(
       function () {
         let cancelled = false;
 
-        const ids =
-          normalizeIds(
-            props.initialIds
-          ).filter(function (id) {
-            return id !== tagId;
-          });
-
         setLoading(true);
         setError(null);
 
-        loadTagsByIds(ids)
+        loadTagsByIds(initialIds)
           .then(function (tags) {
             if (cancelled) {
               return;
@@ -818,10 +812,7 @@
               loadError
             );
 
-            setError(
-              loadError
-            );
-
+            setError(loadError);
             setValues([]);
           })
           .finally(function () {
@@ -836,16 +827,12 @@
       },
       [
         tagId,
-        JSON.stringify(
-          normalizeIds(
-            props.initialIds
-          )
-        ),
+        JSON.stringify(initialIds),
       ]
     );
 
     // ----------------------------------------------------------
-    // Native component unavailable.
+    // TagSelect unavailable
     // ----------------------------------------------------------
 
     if (!TagSelect) {
@@ -860,7 +847,7 @@
     }
 
     // ----------------------------------------------------------
-    // Loading initial values.
+    // Loading
     // ----------------------------------------------------------
 
     if (loading) {
@@ -875,7 +862,7 @@
     }
 
     // ----------------------------------------------------------
-    // Initial loading error.
+    // Error
     // ----------------------------------------------------------
 
     if (error) {
@@ -891,7 +878,7 @@
     }
 
     // ----------------------------------------------------------
-    // Native TagSelect.
+    // Selection handler
     // ----------------------------------------------------------
 
     function handleSelect(tags) {
@@ -901,26 +888,26 @@
           : [];
 
       const filtered =
-        selected.filter(function (tag) {
-          if (
-            !tag ||
-            tag.id === undefined
-          ) {
-            return false;
-          }
+        selected.filter(
+          function (tag) {
+            if (
+              !tag ||
+              tag.id === undefined
+            ) {
+              return false;
+            }
 
-          return (
-            Number(tag.id) !==
-            tagId
-          );
-        });
+            return (
+              Number(tag.id) !==
+              tagId
+            );
+          }
+        );
 
       setValues(filtered);
 
       const ids =
-        normalizeIds(
-          filtered
-        );
+        normalizeIds(filtered);
 
       const key =
         String(tagId);
@@ -946,17 +933,30 @@
         dirty
       );
 
-      setTimeout(
-        function () {
-          if (dirty) {
+      log(
+        'Related tags changed:',
+        {
+          tagId: tagId,
+          ids: ids,
+          dirty: dirty,
+        }
+      );
+
+      if (dirty) {
+        setTimeout(
+          function () {
             updateSaveButton(
               tagId
             );
-          }
-        },
-        0
-      );
+          },
+          0
+        );
+      }
     }
+
+    // ----------------------------------------------------------
+    // Native TagSelect
+    // ----------------------------------------------------------
 
     return createElement(
       TagSelect,
@@ -1018,6 +1018,10 @@
     const setError =
       errorState[1];
 
+    // ----------------------------------------------------------
+    // Load relation IDs
+    // ----------------------------------------------------------
+
     useEffect(
       function () {
         let cancelled = false;
@@ -1058,9 +1062,11 @@
                     return tag.id;
                   }
                 )
-              ).filter(function (id) {
-                return id !== tagId;
-              });
+              ).filter(
+                function (id) {
+                  return id !== tagId;
+                }
+              );
 
             editStates.set(
               key,
@@ -1089,10 +1095,7 @@
               loadError
             );
 
-            setError(
-              loadError
-            );
-
+            setError(loadError);
             setRelations([]);
           })
           .finally(function () {
@@ -1136,7 +1139,6 @@
       {
         className:
           'form-group row tag-relations-form-group',
-
         'data-field':
           'tag_relations',
       },
@@ -1160,9 +1162,7 @@
         createElement(
           RelatedTagsSelect,
           {
-            tagId:
-              tagId,
-
+            tagId: tagId,
             initialIds:
               relations || [],
           }
@@ -1175,9 +1175,7 @@
   // Edit bridge
   // ============================================================
 
-  function TagRelationsEditBridge(
-    props
-  ) {
+  function TagRelationsEditBridge(props) {
     const tagId =
       Number(props.tagId);
 
@@ -1190,21 +1188,14 @@
     const setTarget =
       targetState[1];
 
-    // ----------------------------------------------------------
-    // Find/create portal host
-    // ----------------------------------------------------------
-
     useEffect(
       function () {
         if (!props.enabled) {
           return undefined;
         }
 
-        let currentTarget =
-          null;
-
-        let observer =
-          null;
+        let currentTarget = null;
+        let observer = null;
 
         function findOrCreateTarget() {
           const form =
@@ -1351,17 +1342,17 @@
           const ids =
             editStates.get(key);
 
-          if (
-            !Array.isArray(ids)
-          ) {
+          if (!Array.isArray(ids)) {
             return [];
           }
 
           return normalizeIds(
             ids
-          ).filter(function (id) {
-            return id !== tagId;
-          });
+          ).filter(
+            function (id) {
+              return id !== tagId;
+            }
+          );
         }
 
         function waitForNativeSave() {
@@ -1375,13 +1366,10 @@
           const current =
             editStates.get(key);
 
-          if (
-            !Array.isArray(current)
-          ) {
+          if (!Array.isArray(current)) {
             log(
               'Relations are not loaded yet'
             );
-
             return;
           }
 
@@ -1558,12 +1546,24 @@
       return null;
     }
 
+    /*
+     * КРИТИЧЕСКИЙ МОМЕНТ:
+     *
+     * TagRelationsEditBridge сам находится
+     * внутри React-дерева Stash благодаря patch.after().
+     *
+     * createPortal переносит DOM, но НЕ переносит
+     * React context.
+     *
+     * Поэтому TagSelect здесь получает тот же
+     * Apollo/React context, что и штатные Parent/Child Tags.
+     */
+
     return ReactDOM.createPortal(
       createElement(
         RelationEditFields,
         {
-          tagId:
-            tagId,
+          tagId: tagId,
         }
       ),
       target
@@ -1587,7 +1587,6 @@
       logError(
         'PluginApi.patch.after is unavailable'
       );
-
       return;
     }
 
@@ -1688,9 +1687,7 @@
         getRelations(tagId)
           .then(function (tags) {
             if (!cancelled) {
-              setRelations(
-                tags
-              );
+              setRelations(tags);
             }
           })
           .catch(function (loadError) {
@@ -1700,9 +1697,7 @@
                 loadError
               );
 
-              setError(
-                loadError
-              );
+              setError(loadError);
             }
           });
 
@@ -1743,8 +1738,7 @@
           return createElement(
             'span',
             {
-              key:
-                tag.id,
+              key: tag.id,
 
               'data-sort-name':
                 tag.name,
@@ -2013,6 +2007,7 @@
       }
 
       currentTagId = null;
+
       return;
     }
 
@@ -2023,21 +2018,15 @@
       cleanupInlineRelations();
 
       editStates.delete(
-        String(
-          currentTagId
-        )
+        String(currentTagId)
       );
 
       editInitialStates.delete(
-        String(
-          currentTagId
-        )
+        String(currentTagId)
       );
 
       editDirtyStates.delete(
-        String(
-          currentTagId
-        )
+        String(currentTagId)
       );
     }
 
@@ -2168,9 +2157,7 @@
   // ============================================================
 
   installRouteListener();
-
   startPageObserver();
-
   scanTagPage();
 
   log(
