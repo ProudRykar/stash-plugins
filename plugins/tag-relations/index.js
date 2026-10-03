@@ -7,22 +7,30 @@
   const INLINE_MOUNT_CLASS = 'tag-relations-inline-mount';
   const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
 
+  // ============================================================
+  // State
+  // ============================================================
+
   const relationCache = new Map();
   const relationRequests = new Map();
 
-  // Current relation selection while the tag edit form is open.
-  // null = not loaded yet.
+  // Current selection while editing.
+  // key -> number[]
   const editStates = new Map();
 
-  // Relations as they were when the edit form was opened.
+  // Selection when edit form was opened.
+  // key -> number[]
   const editInitialStates = new Map();
 
-  // Whether the user changed the relation selector.
+  // key -> boolean
   const editDirtyStates = new Map();
 
   let pageObserver = null;
   let routeListenerInstalled = false;
   let currentTagId = null;
+
+  // Prevent installing the ImageInput patch more than once.
+  let imageInputPatched = false;
 
   // ============================================================
   // Logging
@@ -57,7 +65,11 @@
       ),
     };
 
-    log('Plugin operation:', operation, variables.args);
+    log(
+      'Plugin operation:',
+      operation,
+      variables.args
+    );
 
     const response = await fetch('/graphql', {
       method: 'POST',
@@ -186,10 +198,17 @@
     return;
   }
 
-  const createElement = React.createElement;
-  const Fragment = React.Fragment;
-  const useState = React.useState;
-  const useEffect = React.useEffect;
+  const createElement =
+    React.createElement;
+
+  const Fragment =
+    React.Fragment;
+
+  const useState =
+    React.useState;
+
+  const useEffect =
+    React.useEffect;
 
   // ============================================================
   // Native Stash component
@@ -221,8 +240,11 @@
   // ============================================================
 
   function getCurrentTagId() {
+    const pathname =
+      window.location.pathname;
+
     const match =
-      window.location.pathname.match(
+      pathname.match(
         /^\/tags\/(\d+)(?:\/|$)/
       );
 
@@ -230,10 +252,8 @@
       return null;
     }
 
-    const id = parseInt(
-      match[1],
-      10
-    );
+    const id =
+      parseInt(match[1], 10);
 
     return Number.isFinite(id)
       ? id
@@ -300,7 +320,12 @@
           return;
         }
 
-        const id = String(tag.id);
+        const id =
+          Number(tag.id);
+
+        if (!Number.isFinite(id)) {
+          return;
+        }
 
         if (seen.has(id)) {
           return;
@@ -309,16 +334,14 @@
         seen.add(id);
 
         result.push({
-          id: Number(tag.id),
+          id: id,
           name:
             tag.name ||
-            String(tag.id),
+            String(id),
         });
       });
 
-    return result.filter(function (tag) {
-      return Number.isFinite(tag.id);
-    });
+    return result;
   }
 
   // ============================================================
@@ -398,8 +421,19 @@
     const result = [];
     const seen = new Set();
 
-    ids.forEach(function (id) {
-      const numericId = Number(id);
+    ids.forEach(function (value) {
+      let id = value;
+
+      // Tag object -> ID.
+      if (
+        id &&
+        typeof id === 'object'
+      ) {
+        id = id.id;
+      }
+
+      const numericId =
+        Number(id);
 
       if (!Number.isFinite(numericId)) {
         return;
@@ -417,23 +451,32 @@
   }
 
   function sameIds(a, b) {
-    const left = normalizeIds(a).sort(
-      function (x, y) {
-        return x - y;
-      }
-    );
+    const left =
+      normalizeIds(a).sort(
+        function (x, y) {
+          return x - y;
+        }
+      );
 
-    const right = normalizeIds(b).sort(
-      function (x, y) {
-        return x - y;
-      }
-    );
+    const right =
+      normalizeIds(b).sort(
+        function (x, y) {
+          return x - y;
+        }
+      );
 
-    if (left.length !== right.length) {
+    if (
+      left.length !==
+      right.length
+    ) {
       return false;
     }
 
-    for (let i = 0; i < left.length; i += 1) {
+    for (
+      let i = 0;
+      i < left.length;
+      i += 1
+    ) {
       if (left[i] !== right[i]) {
         return false;
       }
@@ -443,11 +486,12 @@
   }
 
   // ============================================================
-  // Save button
+  // Native save button
   // ============================================================
 
   function updateSaveButton(tagId) {
-    const key = String(tagId);
+    const key =
+      String(tagId);
 
     if (
       editDirtyStates.get(key) !== true
@@ -464,28 +508,96 @@
       return;
     }
 
-    // The native Stash button is disabled when
-    // Formik itself is not dirty. Relation changes
-    // are outside Formik, so enable it ourselves.
+    if (button.disabled) {
+      log(
+        'Enabling native Save button because relations changed'
+      );
+    }
+
     button.disabled = false;
     button.removeAttribute('disabled');
   }
 
   // ============================================================
+  // Synchronize relations after native Stash save
+  // ============================================================
+
+  async function syncRelationsAfterNativeSave(
+    tagId,
+    relationIds
+  ) {
+    const key =
+      String(tagId);
+
+    const ids =
+      normalizeIds(
+        relationIds
+      ).filter(function (id) {
+        return id !== Number(tagId);
+      });
+
+    log(
+      'Native tag save completed; synchronizing relations:',
+      {
+        tagId: Number(tagId),
+        related_ids: ids,
+      }
+    );
+
+    try {
+      await runPluginOperation(
+        'set_relations',
+        {
+          tag_id: Number(tagId),
+
+          // The UI represents everything as
+          // "related". Therefore clear the old
+          // "similar" relations.
+          similar_ids: [],
+
+          related_ids: ids,
+        }
+      );
+
+      invalidateRelationCache(
+        tagId
+      );
+
+      editStates.delete(key);
+      editInitialStates.delete(key);
+      editDirtyStates.delete(key);
+
+      log(
+        'Relations synchronized successfully'
+      );
+    } catch (error) {
+      logError(
+        'Failed to synchronize relations after native save:',
+        error
+      );
+    }
+  }
+
+  // ============================================================
   // Related Tags selector
+  //
+  // IMPORTANT:
+  // This component itself is rendered from the existing
+  // Stash React tree through createPortal.
+  //
+  // Therefore TagIDSelect retains Apollo context.
   // ============================================================
 
   function RelatedTagsSelect(props) {
     const tagId =
       Number(props.tagId);
 
-    const initialIds =
-      normalizeIds(
-        props.initialIds
-      );
-
     const state =
-      useState(initialIds);
+      useState(
+        normalizeIds(
+          props.initialIds
+        )
+      );
 
     const selectedIds =
       state[0];
@@ -504,57 +616,46 @@
           );
         }
       },
-      []
+      [TagIDSelect]
     );
 
     function handleSelect(tags) {
+      /*
+       * Native TagIDSelect calls:
+       *
+       * onSelect(items: Tag[])
+       *
+       * So this is an array of Tag objects,
+       * not an array of IDs.
+       */
       const values =
         Array.isArray(tags)
           ? tags
           : [];
 
-      const uniqueIds = [];
-      const seen = new Set();
+      const ids =
+        normalizeIds(values)
+          .filter(function (id) {
+            return id !== tagId;
+          });
 
-      values.forEach(function (tag) {
-        if (!tag) {
-          return;
-        }
+      setSelectedIds(ids);
 
-        const id =
-          Number(tag.id);
-
-        if (!Number.isFinite(id)) {
-          return;
-        }
-
-        if (id === tagId) {
-          return;
-        }
-
-        if (seen.has(id)) {
-          return;
-        }
-
-        seen.add(id);
-        uniqueIds.push(id);
-      });
-
-      setSelectedIds(uniqueIds);
-
-      const key = String(tagId);
+      const key =
+        String(tagId);
 
       editStates.set(
         key,
-        uniqueIds
+        ids
       );
 
       const initial =
-        editInitialStates.get(key) || [];
+        editInitialStates.get(key) ||
+        [];
 
       const dirty =
         !sameIds(
-          uniqueIds,
+          ids,
           initial
         );
 
@@ -564,11 +665,11 @@
       );
 
       if (dirty) {
-        // Give React/Bootstrap one frame to finish
-        // its own update, then enable the native Save.
         setTimeout(
           function () {
-            updateSaveButton(tagId);
+            updateSaveButton(
+              tagId
+            );
           },
           0
         );
@@ -589,14 +690,19 @@
     return createElement(
       TagIDSelect,
       {
-        ids: selectedIds.map(
-          function (id) {
-            return String(id);
-          }
-        ),
+        ids:
+          selectedIds.map(
+            function (id) {
+              return String(id);
+            }
+          ),
+
         isMulti: true,
+
         creatable: false,
-        onSelect: handleSelect,
+
+        onSelect:
+          handleSelect,
       }
     );
   }
@@ -648,8 +754,9 @@
 
         if (Array.isArray(existing)) {
           setRelations(
-            existing
+            existing.slice()
           );
+
           setLoading(false);
 
           return function () {
@@ -690,7 +797,9 @@
               false
             );
 
-            setRelations(ids);
+            setRelations(
+              ids
+            );
           })
           .catch(function (loadError) {
             if (cancelled) {
@@ -777,14 +886,12 @@
   }
 
   // ============================================================
-  // Edit portal
+  // Edit bridge
   //
-  // IMPORTANT:
-  // This component is rendered from inside native Stash's
-  // React tree through ImageInput.
+  // This component is rendered INSIDE Stash's React tree.
   //
-  // createPortal moves only the DOM location.
-  // React context (Apollo, router, etc.) is preserved.
+  // The DOM node is only a portal target.
+  // React/Apollo context stays attached to this component.
   // ============================================================
 
   function TagRelationsEditBridge(props) {
@@ -799,6 +906,10 @@
 
     const setTarget =
       targetState[1];
+
+    // ----------------------------------------------------------
+    // Find/create portal target
+    // ----------------------------------------------------------
 
     useEffect(
       function () {
@@ -837,18 +948,25 @@
 
           let container =
             form.querySelector(
-              '.' + EDIT_FIELDS_CLASS
+              '.' +
+                EDIT_FIELDS_CLASS +
+                '[data-tag-relations-host="true"]'
             );
 
           if (!container) {
             container =
-              document.createElement('div');
+              document.createElement(
+                'div'
+              );
 
             container.className =
               EDIT_FIELDS_CLASS;
 
-            // Put Related Tags immediately after
-            // the native Child Tags field.
+            container.setAttribute(
+              'data-tag-relations-host',
+              'true'
+            );
+
             const childField =
               form.querySelector(
                 '[data-field="child_ids"]'
@@ -869,8 +987,12 @@
           if (
             currentTarget !== container
           ) {
-            currentTarget = container;
-            setTarget(container);
+            currentTarget =
+              container;
+
+            setTarget(
+              container
+            );
           }
         }
 
@@ -884,8 +1006,34 @@
         if (page) {
           observer =
             new MutationObserver(
-              function () {
-                findOrCreateTarget();
+              function (mutations) {
+                /*
+                 * We only care whether the form /
+                 * Child Tags field appeared or
+                 * disappeared.
+                 */
+                let relevant = false;
+
+                for (
+                  let i = 0;
+                  i < mutations.length;
+                  i += 1
+                ) {
+                  const mutation =
+                    mutations[i];
+
+                  if (
+                    mutation.type ===
+                    'childList'
+                  ) {
+                    relevant = true;
+                    break;
+                  }
+                }
+
+                if (relevant) {
+                  findOrCreateTarget();
+                }
               }
             );
 
@@ -914,7 +1062,10 @@
           setTarget(null);
         };
       },
-      [props.enabled, tagId]
+      [
+        props.enabled,
+        tagId,
+      ]
     );
 
     // ----------------------------------------------------------
@@ -945,16 +1096,18 @@
           const ids =
             editStates.get(key);
 
-          return Array.isArray(ids)
-            ? normalizeIds(ids).filter(
-                function (id) {
-                  return id !== tagId;
-                }
-              )
-            : [];
+          if (!Array.isArray(ids)) {
+            return [];
+          }
+
+          return normalizeIds(
+            ids
+          ).filter(function (id) {
+            return id !== tagId;
+          });
         }
 
-        function saveRelationsAfterNativeSave() {
+        function waitForNativeSave() {
           if (waiting) {
             return;
           }
@@ -962,13 +1115,21 @@
           const key =
             String(tagId);
 
-          if (
-            editStates.get(key) === null ||
-            editStates.get(key) === undefined
-          ) {
+          const current =
+            editStates.get(key);
+
+          if (!Array.isArray(current)) {
+            log(
+              'Relations are not loaded yet; not syncing'
+            );
+
             return;
           }
 
+          /*
+           * Snapshot the IDs BEFORE native Stash
+           * re-renders the edit form.
+           */
           const relationIds =
             getCurrentIds();
 
@@ -986,11 +1147,11 @@
                 '#tag-page #tag-edit'
               );
 
-            const stillInDOM =
+            const stillEditing =
               form.isConnected &&
               currentForm === form;
 
-            if (!stillInDOM) {
+            if (!stillEditing) {
               waiting = false;
 
               syncRelationsAfterNativeSave(
@@ -1002,12 +1163,13 @@
             }
 
             if (
-              Date.now() - started >=
+              Date.now() -
+                started >=
               timeout
             ) {
               waiting = false;
 
-              log(
+              logError(
                 'Native save did not finish within timeout; ' +
                   'relations were not synchronized'
               );
@@ -1028,23 +1190,19 @@
         }
 
         function onSubmit() {
-          saveRelationsAfterNativeSave();
+          waitForNativeSave();
         }
 
         function onSaveClick() {
-          saveRelationsAfterNativeSave();
+          waitForNativeSave();
         }
 
-        // Formik's normal save path.
         form.addEventListener(
           'submit',
           onSubmit,
           true
         );
 
-        // DetailsEditNavbar calls formik.handleSubmit
-        // directly from the Save button, so also catch
-        // the button click.
         const saveButton =
           document.querySelector(
             '#tag-page .details-edit button.save'
@@ -1074,11 +1232,14 @@
           }
         };
       },
-      [props.enabled, tagId]
+      [
+        props.enabled,
+        tagId,
+      ]
     );
 
     // ----------------------------------------------------------
-    // Keep native Save enabled when only relations changed.
+    // Keep native Save enabled
     // ----------------------------------------------------------
 
     useEffect(
@@ -1120,9 +1281,6 @@
           navbar,
           {
             attributes: true,
-            attributeFilter: [
-              'disabled',
-            ],
             childList: true,
             subtree: true,
           }
@@ -1132,8 +1290,15 @@
           observer.disconnect();
         };
       },
-      [props.enabled, tagId]
+      [
+        props.enabled,
+        tagId,
+      ]
     );
+
+    // ----------------------------------------------------------
+    // Portal
+    // ----------------------------------------------------------
 
     if (!target) {
       return null;
@@ -1151,21 +1316,56 @@
   }
 
   // ============================================================
-  // Patch native ImageInput
+  // Patch ImageInput
   //
-  // ImageInput is rendered inside TagEditPanel's native
-  // React tree. Therefore the bridge below retains the
-  // ApolloProvider context.
+  // IMPORTANT:
+  //
+  // We validate `original` before putting it into React.
+  // This prevents React #31 if a particular Stash build
+  // returns something that is not a React element.
   // ============================================================
 
-  if (
-    PluginApi.patch &&
-    typeof PluginApi.patch.after ===
-      'function'
-  ) {
+  function installImageInputPatch() {
+    if (imageInputPatched) {
+      return;
+    }
+
+    if (
+      !PluginApi.patch ||
+      typeof PluginApi.patch.after !==
+        'function'
+    ) {
+      logError(
+        'PluginApi.patch.after is unavailable'
+      );
+
+      return;
+    }
+
     PluginApi.patch.after(
       'ImageInput',
       function (props, original) {
+        /*
+         * If Stash gives us something that isn't
+         * a React element, DO NOT pass it as a
+         * React child.
+         *
+         * This is specifically to prevent:
+         *
+         * React error #31
+         * object with keys {}
+         */
+        if (
+          !React.isValidElement(original)
+        ) {
+          logError(
+            'ImageInput patch received invalid React result:',
+            original
+          );
+
+          return original;
+        }
+
         const tagId =
           getCurrentTagId();
 
@@ -1173,13 +1373,17 @@
           !!(
             tagId &&
             props &&
-            props.isEditing
+            props.isEditing === true
           );
 
         if (!enabled) {
           return original;
         }
 
+        /*
+         * Both children are now guaranteed to be
+         * valid React elements.
+         */
         return createElement(
           Fragment,
           null,
@@ -1192,25 +1396,29 @@
               key:
                 'tag-relations-edit-' +
                 tagId,
-              tagId: tagId,
-              enabled: true,
+
+              tagId:
+                tagId,
+
+              enabled:
+                true,
             }
           )
         );
       }
     );
 
+    imageInputPatched = true;
+
     log(
       'Patched native ImageInput for edit portal'
     );
-  } else {
-    logError(
-      'PluginApi.patch.after is unavailable'
-    );
   }
 
+  installImageInputPatch();
+
   // ============================================================
-  // Inline view
+  // Inline normal-view component
   // ============================================================
 
   function RelatedTagsInline(props) {
@@ -1242,7 +1450,9 @@
         getRelations(tagId)
           .then(function (tags) {
             if (!cancelled) {
-              setRelations(tags);
+              setRelations(
+                tags
+              );
             }
           })
           .catch(function (loadError) {
@@ -1252,7 +1462,9 @@
                 loadError
               );
 
-              setError(loadError);
+              setError(
+                loadError
+              );
             }
           });
 
@@ -1278,7 +1490,9 @@
       );
     }
 
-    if (relations.length === 0) {
+    if (
+      relations.length === 0
+    ) {
       return null;
     }
 
@@ -1286,34 +1500,44 @@
       Fragment,
       null,
 
-      relations.map(function (tag) {
-        return createElement(
-          'span',
-          {
-            key: tag.id,
-            'data-sort-name':
-              tag.name,
-            className:
-              'tag-item tag-link badge badge-secondary',
-          },
-
-          createElement(
-            'a',
+      relations.map(
+        function (tag) {
+          return createElement(
+            'span',
             {
-              href:
-                getTagUrl(tag.id),
+              key: tag.id,
+
+              'data-sort-name':
+                tag.name,
+
+              className:
+                'tag-item tag-link badge badge-secondary',
             },
 
             createElement(
-              'div',
-              null,
-              tag.name
+              'a',
+              {
+                href:
+                  getTagUrl(
+                    tag.id
+                  ),
+              },
+
+              createElement(
+                'div',
+                null,
+                tag.name
+              )
             )
-          )
-        );
-      })
+          );
+        }
+      )
     );
   }
+
+  // ============================================================
+  // Inline React lifecycle
+  // ============================================================
 
   function unmountInlineReact(mount) {
     if (!mount) {
@@ -1337,8 +1561,13 @@
       }
     }
 
-    mount.__tagRelationsLegacy = false;
+    mount.__tagRelationsLegacy =
+      false;
   }
+
+  // ============================================================
+  // Install normal-view relations
+  // ============================================================
 
   function installInlineRelations(tagId) {
     const detailGroup =
@@ -1350,7 +1579,7 @@
       return;
     }
 
-    // Never install the inline block while editing.
+    // Never render inline block while editing.
     if (
       document.querySelector(
         '#tag-page #tag-edit'
@@ -1361,7 +1590,8 @@
 
     let item =
       detailGroup.querySelector(
-        '.' + INLINE_ITEM_CLASS
+        '.' +
+          INLINE_ITEM_CLASS
       );
 
     if (item) {
@@ -1371,14 +1601,16 @@
         );
 
       if (
-        existingTagId === String(tagId)
+        existingTagId ===
+        String(tagId)
       ) {
         return;
       }
 
       const oldMount =
         item.querySelector(
-          '.' + INLINE_MOUNT_CLASS
+          '.' +
+            INLINE_MOUNT_CLASS
         );
 
       if (oldMount) {
@@ -1392,7 +1624,9 @@
     }
 
     item =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
     item.className =
       'detail-item ' +
@@ -1404,7 +1638,9 @@
     );
 
     const title =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     title.className =
       'detail-item-title';
@@ -1413,13 +1649,17 @@
       'Связанные теги:';
 
     const value =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     value.className =
       'detail-item-value';
 
     const mount =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     mount.className =
       INLINE_MOUNT_CLASS;
@@ -1467,13 +1707,15 @@
         createElement(
           RelatedTagsInline,
           {
-            tagId: tagId,
+            tagId:
+              tagId,
           }
         ),
         mount
       );
 
-      mount.__tagRelationsLegacy = true;
+      mount.__tagRelationsLegacy =
+        true;
     } catch (error) {
       logError(
         'Failed to mount inline relations:',
@@ -1484,32 +1726,37 @@
     }
   }
 
+  // ============================================================
+  // Cleanup inline view
+  // ============================================================
+
   function cleanupInlineRelations() {
     document
       .querySelectorAll(
-        '.' + INLINE_ITEM_CLASS
+        '.' +
+          INLINE_ITEM_CLASS
       )
-      .forEach(function (element) {
-        const mount =
-          element.querySelector(
-            '.' + INLINE_MOUNT_CLASS
-          );
+      .forEach(
+        function (element) {
+          const mount =
+            element.querySelector(
+              '.' +
+                INLINE_MOUNT_CLASS
+            );
 
-        if (mount) {
-          unmountInlineReact(
-            mount
-          );
+          if (mount) {
+            unmountInlineReact(
+              mount
+            );
+          }
+
+          element.remove();
         }
-
-        element.remove();
-      });
+      );
   }
 
   // ============================================================
-  // Page scanning
-  //
-  // Only the normal-view DOM block is managed here.
-  // Edit mode is handled entirely through the React portal.
+  // Tag page scanning
   // ============================================================
 
   function scanTagPage() {
@@ -1517,7 +1764,9 @@
       getCurrentTagId();
 
     if (!tagId) {
-      if (currentTagId !== null) {
+      if (
+        currentTagId !== null
+      ) {
         cleanupInlineRelations();
       }
 
@@ -1544,7 +1793,8 @@
       );
     }
 
-    currentTagId = tagId;
+    currentTagId =
+      tagId;
 
     const tagPage =
       document.querySelector(
@@ -1571,10 +1821,7 @@
   }
 
   // ============================================================
-  // Scoped DOM observer
-  //
-  // This observes only #tag-page, never the whole document.
-  // It exists only for the non-React inline detail block.
+  // Scoped observer for normal view
   // ============================================================
 
   function startPageObserver() {
@@ -1594,6 +1841,7 @@
           attach,
           100
         );
+
         return;
       }
 
@@ -1626,11 +1874,13 @@
   }
 
   // ============================================================
-  // Route events
+  // Route listener
   // ============================================================
 
   function installRouteListener() {
-    if (routeListenerInstalled) {
+    if (
+      routeListenerInstalled
+    ) {
       return;
     }
 
@@ -1656,7 +1906,8 @@
         }
       );
 
-      routeListenerInstalled = true;
+      routeListenerInstalled =
+        true;
 
       log(
         'Stash route listener installed'
@@ -1688,10 +1939,12 @@
   // ============================================================
 
   installRouteListener();
+
   startPageObserver();
+
   scanTagPage();
 
   log(
-    'loaded - native TagIDSelect uses React/Apollo context'
+    'loaded - native TagIDSelect is rendered through Stash React/Apollo context'
   );
 })();
