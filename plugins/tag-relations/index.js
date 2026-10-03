@@ -5,19 +5,24 @@
 
   const INLINE_ITEM_CLASS = 'tag-relations-inline-item';
   const INLINE_MOUNT_CLASS = 'tag-relations-inline-mount';
-
   const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
-  const EDIT_FIELDS_MARKER = 'data-tag-relations-fields';
-
-  const SAVE_PATCH_MARKER = 'data-tag-relations-save-patched';
 
   const relationCache = new Map();
   const relationRequests = new Map();
+
+  // Current relation selection while the tag edit form is open.
+  // null = not loaded yet.
   const editStates = new Map();
 
-  let currentTagId = null;
-  let editScanTimer = null;
+  // Relations as they were when the edit form was opened.
+  const editInitialStates = new Map();
+
+  // Whether the user changed the relation selector.
+  const editDirtyStates = new Map();
+
+  let pageObserver = null;
   let routeListenerInstalled = false;
+  let currentTagId = null;
 
   // ============================================================
   // Logging
@@ -171,18 +176,28 @@
     return;
   }
 
+  if (
+    typeof ReactDOM.createPortal !==
+    'function'
+  ) {
+    logError(
+      'ReactDOM.createPortal is unavailable'
+    );
+    return;
+  }
+
   const createElement = React.createElement;
   const Fragment = React.Fragment;
-
   const useState = React.useState;
   const useEffect = React.useEffect;
 
   // ============================================================
-  // Native Stash Tag selector
+  // Native Stash component
   // ============================================================
 
   function getNativeTagIDSelect() {
-    const components = PluginApi.components;
+    const components =
+      PluginApi.components;
 
     if (!components) {
       return null;
@@ -199,96 +214,6 @@
     }
 
     return component;
-  }
-
-  // ============================================================
-  // React mounting
-  // ============================================================
-
-  function mountReact(container, element) {
-    if (!container) {
-      throw new Error(
-        'React mount container is missing'
-      );
-    }
-
-    if (container.__tagRelationsRoot) {
-      container.__tagRelationsRoot.render(
-        element
-      );
-
-      return container.__tagRelationsRoot;
-    }
-
-    if (
-      typeof ReactDOM.createRoot ===
-      'function'
-    ) {
-      const root =
-        ReactDOM.createRoot(container);
-
-      container.__tagRelationsRoot = root;
-
-      root.render(element);
-
-      return root;
-    }
-
-    if (
-      typeof ReactDOM.render ===
-      'function'
-    ) {
-      ReactDOM.render(
-        element,
-        container
-      );
-
-      container.__tagRelationsLegacy = true;
-
-      return null;
-    }
-
-    throw new Error(
-      'ReactDOM.createRoot/render is unavailable'
-    );
-  }
-
-  function unmountReact(container) {
-    if (!container) {
-      return;
-    }
-
-    if (container.__tagRelationsRoot) {
-      try {
-        container.__tagRelationsRoot.unmount();
-      } catch (error) {
-        logError(
-          'Failed to unmount React root:',
-          error
-        );
-      }
-
-      container.__tagRelationsRoot = null;
-    }
-
-    if (
-      container.__tagRelationsLegacy &&
-      typeof ReactDOM.unmountComponentAtNode ===
-        'function'
-    ) {
-      try {
-        ReactDOM.unmountComponentAtNode(
-          container
-        );
-      } catch (error) {
-        logError(
-          'Failed to unmount legacy React:',
-          error
-        );
-      }
-
-      container.__tagRelationsLegacy = false;
-    }
   }
 
   // ============================================================
@@ -364,15 +289,6 @@
 
     const result = [];
     const seen = new Set();
-
-    /*
-     * The current UI exposes one concept:
-     * "Related Tags".
-     *
-     * The backend may still contain both
-     * similar and related relations, therefore
-     * both are displayed here.
-     */
 
     similar
       .concat(related)
@@ -471,28 +387,111 @@
   }
 
   // ============================================================
-  // Related Tags Select
+  // Array helpers
+  // ============================================================
+
+  function normalizeIds(ids) {
+    if (!Array.isArray(ids)) {
+      return [];
+    }
+
+    const result = [];
+    const seen = new Set();
+
+    ids.forEach(function (id) {
+      const numericId = Number(id);
+
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+
+      if (seen.has(numericId)) {
+        return;
+      }
+
+      seen.add(numericId);
+      result.push(numericId);
+    });
+
+    return result;
+  }
+
+  function sameIds(a, b) {
+    const left = normalizeIds(a).sort(
+      function (x, y) {
+        return x - y;
+      }
+    );
+
+    const right = normalizeIds(b).sort(
+      function (x, y) {
+        return x - y;
+      }
+    );
+
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    for (let i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // ============================================================
+  // Save button
+  // ============================================================
+
+  function updateSaveButton(tagId) {
+    const key = String(tagId);
+
+    if (
+      editDirtyStates.get(key) !== true
+    ) {
+      return;
+    }
+
+    const button =
+      document.querySelector(
+        '#tag-page .details-edit button.save'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    // The native Stash button is disabled when
+    // Formik itself is not dirty. Relation changes
+    // are outside Formik, so enable it ourselves.
+    button.disabled = false;
+    button.removeAttribute('disabled');
+  }
+
+  // ============================================================
+  // Related Tags selector
   // ============================================================
 
   function RelatedTagsSelect(props) {
-    const tagId = Number(props.tagId);
+    const tagId =
+      Number(props.tagId);
 
     const initialIds =
-      Array.isArray(props.initialIds)
-        ? props.initialIds
-            .map(function (id) {
-              return Number(id);
-            })
-            .filter(function (id) {
-              return Number.isFinite(id);
-            })
-        : [];
+      normalizeIds(
+        props.initialIds
+      );
 
     const state =
       useState(initialIds);
 
-    const selectedIds = state[0];
-    const setSelectedIds = state[1];
+    const selectedIds =
+      state[0];
+
+    const setSelectedIds =
+      state[1];
 
     const TagIDSelect =
       getNativeTagIDSelect();
@@ -522,7 +521,8 @@
           return;
         }
 
-        const id = Number(tag.id);
+        const id =
+          Number(tag.id);
 
         if (!Number.isFinite(id)) {
           return;
@@ -542,10 +542,37 @@
 
       setSelectedIds(uniqueIds);
 
+      const key = String(tagId);
+
       editStates.set(
-        String(tagId),
+        key,
         uniqueIds
       );
+
+      const initial =
+        editInitialStates.get(key) || [];
+
+      const dirty =
+        !sameIds(
+          uniqueIds,
+          initial
+        );
+
+      editDirtyStates.set(
+        key,
+        dirty
+      );
+
+      if (dirty) {
+        // Give React/Bootstrap one frame to finish
+        // its own update, then enable the native Save.
+        setTimeout(
+          function () {
+            updateSaveButton(tagId);
+          },
+          0
+        );
+      }
     }
 
     if (!TagIDSelect) {
@@ -568,6 +595,7 @@
           }
         ),
         isMulti: true,
+        creatable: false,
         onSelect: handleSelect,
       }
     );
@@ -578,7 +606,8 @@
   // ============================================================
 
   function RelationEditFields(props) {
-    const tagId = Number(props.tagId);
+    const tagId =
+      Number(props.tagId);
 
     const relationsState =
       useState(null);
@@ -611,23 +640,16 @@
       function () {
         let cancelled = false;
 
-        const existing =
-          editStates.get(
-            String(tagId)
-          );
+        const key =
+          String(tagId);
 
-        /*
-         * null = not loaded
-         * []   = loaded and empty
-         */
+        const existing =
+          editStates.get(key);
 
         if (Array.isArray(existing)) {
           setRelations(
-            existing.map(function (id) {
-              return Number(id);
-            })
+            existing
           );
-
           setLoading(false);
 
           return function () {
@@ -645,20 +667,30 @@
             }
 
             const ids =
-              tags
-                .map(function (tag) {
-                  return Number(tag.id);
-                })
-                .filter(function (id) {
-                  return Number.isFinite(id);
-                });
-
-            setRelations(ids);
+              normalizeIds(
+                tags.map(
+                  function (tag) {
+                    return tag.id;
+                  }
+                )
+              );
 
             editStates.set(
-              String(tagId),
+              key,
               ids
             );
+
+            editInitialStates.set(
+              key,
+              ids.slice()
+            );
+
+            editDirtyStates.set(
+              key,
+              false
+            );
+
+            setRelations(ids);
           })
           .catch(function (loadError) {
             if (cancelled) {
@@ -745,11 +777,445 @@
   }
 
   // ============================================================
+  // Edit portal
+  //
+  // IMPORTANT:
+  // This component is rendered from inside native Stash's
+  // React tree through ImageInput.
+  //
+  // createPortal moves only the DOM location.
+  // React context (Apollo, router, etc.) is preserved.
+  // ============================================================
+
+  function TagRelationsEditBridge(props) {
+    const tagId =
+      Number(props.tagId);
+
+    const targetState =
+      useState(null);
+
+    const target =
+      targetState[0];
+
+    const setTarget =
+      targetState[1];
+
+    useEffect(
+      function () {
+        if (!props.enabled) {
+          return undefined;
+        }
+
+        let currentTarget = null;
+        let observer = null;
+
+        function removeTarget() {
+          if (
+            currentTarget &&
+            currentTarget.isConnected
+          ) {
+            currentTarget.remove();
+          }
+
+          currentTarget = null;
+          setTarget(null);
+        }
+
+        function findOrCreateTarget() {
+          const form =
+            document.querySelector(
+              '#tag-page #tag-edit'
+            );
+
+          if (!form) {
+            if (currentTarget) {
+              removeTarget();
+            }
+
+            return;
+          }
+
+          let container =
+            form.querySelector(
+              '.' + EDIT_FIELDS_CLASS
+            );
+
+          if (!container) {
+            container =
+              document.createElement('div');
+
+            container.className =
+              EDIT_FIELDS_CLASS;
+
+            // Put Related Tags immediately after
+            // the native Child Tags field.
+            const childField =
+              form.querySelector(
+                '[data-field="child_ids"]'
+              );
+
+            if (childField) {
+              childField.insertAdjacentElement(
+                'afterend',
+                container
+              );
+            } else {
+              form.appendChild(
+                container
+              );
+            }
+          }
+
+          if (
+            currentTarget !== container
+          ) {
+            currentTarget = container;
+            setTarget(container);
+          }
+        }
+
+        findOrCreateTarget();
+
+        const page =
+          document.querySelector(
+            '#tag-page'
+          );
+
+        if (page) {
+          observer =
+            new MutationObserver(
+              function () {
+                findOrCreateTarget();
+              }
+            );
+
+          observer.observe(
+            page,
+            {
+              childList: true,
+              subtree: true,
+            }
+          );
+        }
+
+        return function () {
+          if (observer) {
+            observer.disconnect();
+          }
+
+          if (
+            currentTarget &&
+            currentTarget.isConnected
+          ) {
+            currentTarget.remove();
+          }
+
+          currentTarget = null;
+          setTarget(null);
+        };
+      },
+      [props.enabled, tagId]
+    );
+
+    // ----------------------------------------------------------
+    // Native save integration
+    // ----------------------------------------------------------
+
+    useEffect(
+      function () {
+        if (!props.enabled) {
+          return undefined;
+        }
+
+        const form =
+          document.querySelector(
+            '#tag-page #tag-edit'
+          );
+
+        if (!form) {
+          return undefined;
+        }
+
+        let waiting = false;
+
+        function getCurrentIds() {
+          const key =
+            String(tagId);
+
+          const ids =
+            editStates.get(key);
+
+          return Array.isArray(ids)
+            ? normalizeIds(ids).filter(
+                function (id) {
+                  return id !== tagId;
+                }
+              )
+            : [];
+        }
+
+        function saveRelationsAfterNativeSave() {
+          if (waiting) {
+            return;
+          }
+
+          const key =
+            String(tagId);
+
+          if (
+            editStates.get(key) === null ||
+            editStates.get(key) === undefined
+          ) {
+            return;
+          }
+
+          const relationIds =
+            getCurrentIds();
+
+          waiting = true;
+
+          const started =
+            Date.now();
+
+          const timeout =
+            15000;
+
+          function check() {
+            const currentForm =
+              document.querySelector(
+                '#tag-page #tag-edit'
+              );
+
+            const stillInDOM =
+              form.isConnected &&
+              currentForm === form;
+
+            if (!stillInDOM) {
+              waiting = false;
+
+              syncRelationsAfterNativeSave(
+                tagId,
+                relationIds
+              );
+
+              return;
+            }
+
+            if (
+              Date.now() - started >=
+              timeout
+            ) {
+              waiting = false;
+
+              log(
+                'Native save did not finish within timeout; ' +
+                  'relations were not synchronized'
+              );
+
+              return;
+            }
+
+            setTimeout(
+              check,
+              100
+            );
+          }
+
+          setTimeout(
+            check,
+            100
+          );
+        }
+
+        function onSubmit() {
+          saveRelationsAfterNativeSave();
+        }
+
+        function onSaveClick() {
+          saveRelationsAfterNativeSave();
+        }
+
+        // Formik's normal save path.
+        form.addEventListener(
+          'submit',
+          onSubmit,
+          true
+        );
+
+        // DetailsEditNavbar calls formik.handleSubmit
+        // directly from the Save button, so also catch
+        // the button click.
+        const saveButton =
+          document.querySelector(
+            '#tag-page .details-edit button.save'
+          );
+
+        if (saveButton) {
+          saveButton.addEventListener(
+            'click',
+            onSaveClick,
+            true
+          );
+        }
+
+        return function () {
+          form.removeEventListener(
+            'submit',
+            onSubmit,
+            true
+          );
+
+          if (saveButton) {
+            saveButton.removeEventListener(
+              'click',
+              onSaveClick,
+              true
+            );
+          }
+        };
+      },
+      [props.enabled, tagId]
+    );
+
+    // ----------------------------------------------------------
+    // Keep native Save enabled when only relations changed.
+    // ----------------------------------------------------------
+
+    useEffect(
+      function () {
+        if (!props.enabled) {
+          return undefined;
+        }
+
+        const key =
+          String(tagId);
+
+        function update() {
+          if (
+            editDirtyStates.get(key) === true
+          ) {
+            updateSaveButton(tagId);
+          }
+        }
+
+        update();
+
+        const navbar =
+          document.querySelector(
+            '#tag-page .details-edit'
+          );
+
+        if (!navbar) {
+          return undefined;
+        }
+
+        const observer =
+          new MutationObserver(
+            function () {
+              update();
+            }
+          );
+
+        observer.observe(
+          navbar,
+          {
+            attributes: true,
+            attributeFilter: [
+              'disabled',
+            ],
+            childList: true,
+            subtree: true,
+          }
+        );
+
+        return function () {
+          observer.disconnect();
+        };
+      },
+      [props.enabled, tagId]
+    );
+
+    if (!target) {
+      return null;
+    }
+
+    return ReactDOM.createPortal(
+      createElement(
+        RelationEditFields,
+        {
+          tagId: tagId,
+        }
+      ),
+      target
+    );
+  }
+
+  // ============================================================
+  // Patch native ImageInput
+  //
+  // ImageInput is rendered inside TagEditPanel's native
+  // React tree. Therefore the bridge below retains the
+  // ApolloProvider context.
+  // ============================================================
+
+  if (
+    PluginApi.patch &&
+    typeof PluginApi.patch.after ===
+      'function'
+  ) {
+    PluginApi.patch.after(
+      'ImageInput',
+      function (props, original) {
+        const tagId =
+          getCurrentTagId();
+
+        const enabled =
+          !!(
+            tagId &&
+            props &&
+            props.isEditing
+          );
+
+        if (!enabled) {
+          return original;
+        }
+
+        return createElement(
+          Fragment,
+          null,
+
+          original,
+
+          createElement(
+            TagRelationsEditBridge,
+            {
+              key:
+                'tag-relations-edit-' +
+                tagId,
+              tagId: tagId,
+              enabled: true,
+            }
+          )
+        );
+      }
+    );
+
+    log(
+      'Patched native ImageInput for edit portal'
+    );
+  } else {
+    logError(
+      'PluginApi.patch.after is unavailable'
+    );
+  }
+
+  // ============================================================
   // Inline view
   // ============================================================
 
   function RelatedTagsInline(props) {
-    const tagId = Number(props.tagId);
+    const tagId =
+      Number(props.tagId);
 
     const state =
       useState(null);
@@ -849,9 +1315,30 @@
     );
   }
 
-  // ============================================================
-  // Normal view
-  // ============================================================
+  function unmountInlineReact(mount) {
+    if (!mount) {
+      return;
+    }
+
+    if (
+      mount.__tagRelationsLegacy &&
+      typeof ReactDOM.unmountComponentAtNode ===
+        'function'
+    ) {
+      try {
+        ReactDOM.unmountComponentAtNode(
+          mount
+        );
+      } catch (error) {
+        logError(
+          'Failed to unmount inline React:',
+          error
+        );
+      }
+    }
+
+    mount.__tagRelationsLegacy = false;
+  }
 
   function installInlineRelations(tagId) {
     const detailGroup =
@@ -860,6 +1347,15 @@
       );
 
     if (!detailGroup) {
+      return;
+    }
+
+    // Never install the inline block while editing.
+    if (
+      document.querySelector(
+        '#tag-page #tag-edit'
+      )
+    ) {
       return;
     }
 
@@ -886,7 +1382,9 @@
         );
 
       if (oldMount) {
-        unmountReact(oldMount);
+        unmountInlineReact(
+          oldMount
+        );
       }
 
       item.remove();
@@ -926,14 +1424,17 @@
     mount.className =
       INLINE_MOUNT_CLASS;
 
-    mount.setAttribute(
-      'data-tag-id',
-      String(tagId)
+    value.appendChild(
+      mount
     );
 
-    value.appendChild(mount);
-    item.appendChild(title);
-    item.appendChild(value);
+    item.appendChild(
+      title
+    );
+
+    item.appendChild(
+      value
+    );
 
     const subTags =
       detailGroup.querySelector(
@@ -956,19 +1457,23 @@
         item
       );
     } else {
-      detailGroup.appendChild(item);
+      detailGroup.appendChild(
+        item
+      );
     }
 
     try {
-      mountReact(
-        mount,
+      ReactDOM.render(
         createElement(
           RelatedTagsInline,
           {
-            tagId: String(tagId),
+            tagId: tagId,
           }
-        )
+        ),
+        mount
       );
+
+      mount.__tagRelationsLegacy = true;
     } catch (error) {
       logError(
         'Failed to mount inline relations:',
@@ -979,448 +1484,7 @@
     }
   }
 
-  // ============================================================
-  // Edit view
-  // ============================================================
-
-  function findEditContainers(form) {
-    return Array.from(
-      form.querySelectorAll(
-        '.' + EDIT_FIELDS_CLASS
-      )
-    );
-  }
-
-  function removeDuplicateEditFields(form) {
-    const containers =
-      findEditContainers(form);
-
-    if (containers.length === 0) {
-      return null;
-    }
-
-    /*
-     * Keep exactly one container.
-     */
-
-    const keeper = containers[0];
-
-    containers
-      .slice(1)
-      .forEach(function (element) {
-        log(
-          'Removing duplicate edit container'
-        );
-
-        unmountReact(element);
-        element.remove();
-      });
-
-    keeper.setAttribute(
-      EDIT_FIELDS_MARKER,
-      'true'
-    );
-
-    return keeper;
-  }
-
-  function createEditFieldsContainer(form) {
-    const container =
-      document.createElement('div');
-
-    container.className =
-      EDIT_FIELDS_CLASS;
-
-    container.setAttribute(
-      EDIT_FIELDS_MARKER,
-      'true'
-    );
-
-    form.appendChild(container);
-
-    return container;
-  }
-
-  function installEditFields(tagId) {
-    const form =
-      document.querySelector(
-        '#tag-page #tag-edit'
-      );
-
-    if (!form) {
-      return;
-    }
-
-    const numericTagId =
-      Number(tagId);
-
-    /*
-     * IMPORTANT:
-     *
-     * scanTagPage() runs every 500 ms.
-     *
-     * The form itself is our lifecycle owner.
-     *
-     * If this exact form has already been initialized
-     * for this exact tag, DO NOT touch the React tree.
-     */
-
-    if (
-      form.__tagRelationsInitialized === true &&
-      form.__tagRelationsTagId === numericTagId
-    ) {
-      patchSaveButton(
-        numericTagId,
-        form
-      );
-
-      return;
-    }
-
-    /*
-     * If Stash replaced the form, its expando properties
-     * are gone and we initialize the new form.
-     *
-     * If Stash reused the form for another tag,
-     * clean the old React tree first.
-     */
-
-    if (
-      form.__tagRelationsInitialized === true
-    ) {
-      findEditContainers(form)
-        .forEach(function (element) {
-          unmountReact(element);
-          element.remove();
-        });
-    }
-
-    /*
-     * Remove any duplicates that may have been left
-     * by an older version of the plugin.
-     */
-
-    let fieldsContainer =
-      removeDuplicateEditFields(form);
-
-    if (!fieldsContainer) {
-      fieldsContainer =
-        createEditFieldsContainer(form);
-    }
-
-    const key =
-      String(numericTagId);
-
-    if (!editStates.has(key)) {
-      editStates.set(
-        key,
-        null
-      );
-    }
-
-    /*
-     * Mark the FORM before mounting React.
-     *
-     * This prevents another polling pass from
-     * attempting another initialization.
-     */
-
-    form.__tagRelationsInitialized = true;
-    form.__tagRelationsTagId =
-      numericTagId;
-
-    /*
-     * Exactly one React root per container.
-     */
-
-    if (!fieldsContainer.__tagRelationsRoot) {
-      try {
-        mountReact(
-          fieldsContainer,
-          createElement(
-            RelationEditFields,
-            {
-              tagId: numericTagId,
-            }
-          )
-        );
-      } catch (error) {
-        logError(
-          'Failed to mount relation edit fields:',
-          error
-        );
-
-        unmountReact(
-          fieldsContainer
-        );
-
-        fieldsContainer.remove();
-
-        delete form.__tagRelationsInitialized;
-        delete form.__tagRelationsTagId;
-
-        return;
-      }
-    }
-
-    patchSaveButton(
-      numericTagId,
-      form
-    );
-  }
-
-  // ============================================================
-  // Save
-  // ============================================================
-
-  function patchSaveButton(tagId, form) {
-    const controls =
-      document.querySelector(
-        '#tag-page .details-edit'
-      );
-
-    if (!controls) {
-      return;
-    }
-
-    const saveButton =
-      controls.querySelector(
-        'button.save'
-      );
-
-    if (!saveButton) {
-      return;
-    }
-
-    const patchedForm =
-      saveButton.__tagRelationsForm;
-
-    const patchedTagId =
-      saveButton.__tagRelationsTagId;
-
-    /*
-     * Already patched for exactly this form and tag.
-     */
-
-    if (
-      patchedForm === form &&
-      patchedTagId === Number(tagId)
-    ) {
-      return;
-    }
-
-    /*
-     * The button may have survived while Stash
-     * replaced the form.
-     */
-
-    if (
-      saveButton.__tagRelationsSaveHandler
-    ) {
-      saveButton.removeEventListener(
-        'click',
-        saveButton.__tagRelationsSaveHandler,
-        true
-      );
-
-      saveButton.__tagRelationsSaveHandler =
-        null;
-    }
-
-    const handler =
-      function () {
-        const key =
-          String(tagId);
-
-        const state =
-          editStates.get(key);
-
-        if (!Array.isArray(state)) {
-          log(
-            'Save clicked before relations finished loading'
-          );
-
-          return;
-        }
-
-        const relationIds =
-          state
-            .map(function (id) {
-              return Number(id);
-            })
-            .filter(function (id) {
-              return (
-                Number.isFinite(id) &&
-                id !== Number(tagId)
-              );
-            });
-
-        waitForNativeSave(
-          Number(tagId),
-          form,
-          relationIds
-        );
-      };
-
-    saveButton.addEventListener(
-      'click',
-      handler,
-      true
-    );
-
-    saveButton.__tagRelationsSaveHandler =
-      handler;
-
-    saveButton.__tagRelationsForm =
-      form;
-
-    saveButton.__tagRelationsTagId =
-      Number(tagId);
-
-    saveButton.setAttribute(
-      SAVE_PATCH_MARKER,
-      'true'
-    );
-  }
-
-  function waitForNativeSave(
-    tagId,
-    form,
-    relationIds
-  ) {
-    if (
-      form.__tagRelationsSaveWaiting
-    ) {
-      return;
-    }
-
-    form.__tagRelationsSaveWaiting =
-      true;
-
-    const started =
-      Date.now();
-
-    const timeout =
-      15000;
-
-    function check() {
-      const currentForm =
-        document.querySelector(
-          '#tag-page #tag-edit'
-        );
-
-      const stillInDOM =
-        form.isConnected &&
-        currentForm === form;
-
-      /*
-       * Native Stash save normally causes the edit
-       * form to disappear or be replaced.
-       */
-
-      if (!stillInDOM) {
-        form.__tagRelationsSaveWaiting =
-          false;
-
-        syncRelationsAfterNativeSave(
-          tagId,
-          relationIds
-        );
-
-        return;
-      }
-
-      if (
-        Date.now() - started >=
-        timeout
-      ) {
-        form.__tagRelationsSaveWaiting =
-          false;
-
-        log(
-          'Native save did not finish within timeout; ' +
-            'relations were not synchronized'
-        );
-
-        return;
-      }
-
-      setTimeout(
-        check,
-        100
-      );
-    }
-
-    setTimeout(
-      check,
-      100
-    );
-  }
-
-  async function syncRelationsAfterNativeSave(
-    tagId,
-    relationIds
-  ) {
-    try {
-      log(
-        'Synchronizing related tags:',
-        {
-          tagId: Number(tagId),
-          related: relationIds,
-        }
-      );
-
-      await runPluginOperation(
-        'set_relations',
-        {
-          tag_id: Number(tagId),
-
-          /*
-           * The UI exposes one relation type:
-           * "related".
-           *
-           * Therefore all selected IDs become related_ids.
-           * Existing similar relations are removed.
-           */
-
-          similar_ids: [],
-          related_ids: relationIds,
-        }
-      );
-
-      invalidateRelationCache(
-        tagId
-      );
-
-      editStates.delete(
-        String(tagId)
-      );
-
-      log(
-        'Related tags saved successfully'
-      );
-    } catch (error) {
-      logError(
-        'Failed to save related tags:',
-        error
-      );
-
-      window.alert(
-        'Не удалось сохранить связанные теги:\n\n' +
-          error.message
-      );
-    }
-  }
-
-  // ============================================================
-  // Cleanup
-  // ============================================================
-
-  function cleanupPluginUI() {
-    /*
-     * Inline React components.
-     */
-
+  function cleanupInlineRelations() {
     document
       .querySelectorAll(
         '.' + INLINE_ITEM_CLASS
@@ -1432,102 +1496,52 @@
           );
 
         if (mount) {
-          unmountReact(mount);
-        }
-
-        element.remove();
-      });
-
-    /*
-     * Edit React components.
-     */
-
-    document
-      .querySelectorAll(
-        '.' + EDIT_FIELDS_CLASS
-      )
-      .forEach(function (element) {
-        unmountReact(element);
-        element.remove();
-      });
-
-    /*
-     * Remove plugin Save handlers.
-     */
-
-    document
-      .querySelectorAll(
-        'button[' +
-          SAVE_PATCH_MARKER +
-          ']'
-      )
-      .forEach(function (button) {
-        if (
-          button.__tagRelationsSaveHandler
-        ) {
-          button.removeEventListener(
-            'click',
-            button.__tagRelationsSaveHandler,
-            true
+          unmountInlineReact(
+            mount
           );
         }
 
-        delete button.__tagRelationsSaveHandler;
-        delete button.__tagRelationsForm;
-        delete button.__tagRelationsTagId;
-
-        button.removeAttribute(
-          SAVE_PATCH_MARKER
-        );
+        element.remove();
       });
-
-    /*
-     * Clear lifecycle markers from forms.
-     */
-
-    document
-      .querySelectorAll(
-        '#tag-page #tag-edit'
-      )
-      .forEach(function (form) {
-        delete form.__tagRelationsInitialized;
-        delete form.__tagRelationsTagId;
-        delete form.__tagRelationsSaveWaiting;
-      });
-
-    editStates.clear();
   }
 
   // ============================================================
-  // Tag page scan
+  // Page scanning
+  //
+  // Only the normal-view DOM block is managed here.
+  // Edit mode is handled entirely through the React portal.
   // ============================================================
 
   function scanTagPage() {
     const tagId =
       getCurrentTagId();
 
-    /*
-     * We are no longer on a tag page.
-     */
-
     if (!tagId) {
       if (currentTagId !== null) {
-        cleanupPluginUI();
-        currentTagId = null;
+        cleanupInlineRelations();
       }
 
+      currentTagId = null;
       return;
     }
-
-    /*
-     * We navigated from one tag to another.
-     */
 
     if (
       currentTagId !== null &&
       currentTagId !== tagId
     ) {
-      cleanupPluginUI();
+      cleanupInlineRelations();
+
+      editStates.delete(
+        String(currentTagId)
+      );
+
+      editInitialStates.delete(
+        String(currentTagId)
+      );
+
+      editDirtyStates.delete(
+        String(currentTagId)
+      );
     }
 
     currentTagId = tagId;
@@ -1542,15 +1556,73 @@
     }
 
     const editForm =
-      document.querySelector(
-        '#tag-page #tag-edit'
+      tagPage.querySelector(
+        '#tag-edit'
       );
 
     if (editForm) {
-      installEditFields(tagId);
-    } else {
-      installInlineRelations(tagId);
+      cleanupInlineRelations();
+      return;
     }
+
+    installInlineRelations(
+      tagId
+    );
+  }
+
+  // ============================================================
+  // Scoped DOM observer
+  //
+  // This observes only #tag-page, never the whole document.
+  // It exists only for the non-React inline detail block.
+  // ============================================================
+
+  function startPageObserver() {
+    if (pageObserver) {
+      pageObserver.disconnect();
+      pageObserver = null;
+    }
+
+    function attach() {
+      const page =
+        document.querySelector(
+          '#tag-page'
+        );
+
+      if (!page) {
+        setTimeout(
+          attach,
+          100
+        );
+        return;
+      }
+
+      pageObserver =
+        new MutationObserver(
+          function () {
+            try {
+              scanTagPage();
+            } catch (error) {
+              logError(
+                'Tag page scan failed:',
+                error
+              );
+            }
+          }
+        );
+
+      pageObserver.observe(
+        page,
+        {
+          childList: true,
+          subtree: true,
+        }
+      );
+
+      scanTagPage();
+    }
+
+    attach();
   }
 
   // ============================================================
@@ -1570,10 +1642,7 @@
       PluginApi.Event.addEventListener(
         'stash:location',
         function () {
-          /*
-           * Stash may need a render cycle before
-           * the tag page exists in the DOM.
-           */
+          cleanupInlineRelations();
 
           setTimeout(
             scanTagPage,
@@ -1596,138 +1665,22 @@
   }
 
   // ============================================================
-  // Edit mode detection
+  // Cleanup
   // ============================================================
 
-  function startEditModePolling() {
-    if (editScanTimer) {
-      clearInterval(
-        editScanTimer
-      );
+  function cleanup() {
+    cleanupInlineRelations();
+
+    if (pageObserver) {
+      pageObserver.disconnect();
+      pageObserver = null;
     }
 
-    editScanTimer =
-      setInterval(
-        function () {
-          try {
-            scanTagPage();
-          } catch (error) {
-            logError(
-              'Tag page scan failed:',
-              error
-            );
-          }
-        },
-        500
-      );
-  }
+    editStates.clear();
+    editInitialStates.clear();
+    editDirtyStates.clear();
 
-  // ============================================================
-  // Standalone route
-  // ============================================================
-
-  function TagRelationsPage() {
-    const relationsState =
-      useState([]);
-
-    const relations =
-      relationsState[0];
-
-    const setRelations =
-      relationsState[1];
-
-    const loadingState =
-      useState(false);
-
-    const loading =
-      loadingState[0];
-
-    const setLoading =
-      loadingState[1];
-
-    useEffect(
-      function () {
-        let cancelled = false;
-
-        setLoading(true);
-
-        runPluginOperation(
-          'export_relations'
-        )
-          .then(function (data) {
-            if (
-              !cancelled &&
-              data &&
-              Array.isArray(
-                data.relations
-              )
-            ) {
-              setRelations(
-                data.relations
-              );
-            }
-          })
-          .catch(function (error) {
-            if (!cancelled) {
-              logError(
-                'Failed to load relations:',
-                error
-              );
-            }
-          })
-          .finally(function () {
-            if (!cancelled) {
-              setLoading(false);
-            }
-          });
-
-        return function () {
-          cancelled = true;
-        };
-      },
-      []
-    );
-
-    return createElement(
-      'div',
-      {
-        className:
-          'tag-relations-page',
-      },
-
-      createElement(
-        'h2',
-        null,
-        'Tag Relations'
-      ),
-
-      loading
-        ? createElement(
-            'div',
-            null,
-            'Loading...'
-          )
-        : createElement(
-            'div',
-            null,
-            'Relations: ' +
-              relations.length
-          )
-    );
-  }
-
-  // ============================================================
-  // Route
-  // ============================================================
-
-  if (
-    PluginApi.register &&
-    PluginApi.register.route
-  ) {
-    PluginApi.register.route(
-      '/plugin/tag-relations',
-      TagRelationsPage
-    );
+    currentTagId = null;
   }
 
   // ============================================================
@@ -1735,10 +1688,10 @@
   // ============================================================
 
   installRouteListener();
-
-  startEditModePolling();
-
+  startPageObserver();
   scanTagPage();
 
-  log('loaded');
+  log(
+    'loaded - native TagIDSelect uses React/Apollo context'
+  );
 })();
