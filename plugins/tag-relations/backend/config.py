@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dataclasses import dataclass
-
+from backend.errors import PluginError
 
 @dataclass(frozen=True, slots=True)
 class Config:
@@ -22,10 +22,7 @@ def load_config(plugin_dir: str, settings: dict | None = None) -> Config:
     stash_url = settings.get("stash_url", "").strip()
 
     if not stash_url:
-        raise ConfigError(
-            "Stash URL is not configured. "
-            "Please configure 'stash_url' in plugin settings."
-        )
+        raise PluginError(message="Stash URL is not configured, Please configure 'stash_url' in plugin settings.", code=500)
 
     api_key = settings.get("api_key", "").strip() or None
 
