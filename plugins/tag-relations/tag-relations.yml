@@ -7,7 +7,6 @@ settings:
   database_path:
     displayName: Database path
     type: STRING
-    default: ""
 
 ui:
   javascript:
@@ -20,3 +19,12 @@ exec:
   - "{pluginDir}/backend/main.py"
 
 interface: raw
+
+hooks:
+  - name: tag-destroy
+    triggeredBy:
+      - Tag.Destroy.Post
+
+  - name: tag-merge
+    triggeredBy:
+      - Tag.Merge.Post
