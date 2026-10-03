@@ -11,8 +11,8 @@
   name: Tag Relations
   metadata:
     description: Manage relationships between Stash tags (similar/related)
-  version: 0.1.7-2ba85ea
-  date: 2026-10-03 13:40:50
+  version: 0.1.7-bba6080
+  date: 2026-10-03 14:08:42
   path: tag-relations.zip
-  sha256: 872b401aea3b77566e35559be5d0065acf78c68de7108959c1d49686716a74d9
+  sha256: b5f8254442f4e5ea71df73b2a7cdd67489ef3e58d734016cbaa1fe2e48727303
 

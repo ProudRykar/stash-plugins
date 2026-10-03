@@ -31,6 +31,14 @@
   let editScanTimer = null;
   let routeListenerInstalled = false;
 
+  /*
+   * Watches Stash's edit controls so React flipping
+   * `disabled` back on is undone before the user can
+   * click.
+   */
+  let saveObserver = null;
+  let saveObserverTarget = null;
+
   function log() {
     console.log('[Tag Relations]', ...arguments);
   }
@@ -1558,6 +1566,85 @@
   // ============================================================
 
   /*
+   * React keeps the props it last committed on the DOM
+   * node under a key like "__reactProps$<random>".
+   *
+   * getListener() in react-dom reads props.disabled from
+   * there and returns null while it is true, so the
+   * synthetic onClick is never dispatched — no matter
+   * what the real `disabled` attribute says.
+   */
+
+  function getReactProps(node) {
+    const keys = Object.keys(node);
+
+    for (let i = 0; i < keys.length; i++) {
+      if (
+        keys[i].indexOf('__reactProps') === 0
+      ) {
+        return node[keys[i]];
+      }
+    }
+
+    return null;
+  }
+
+  /*
+   * React rewrites both the attribute and its own props
+   * on every commit. Observe the tag page so the flip is
+   * redone as a microtask, before the user can click.
+   */
+
+  function ensureSaveObserver() {
+    const tagPage =
+      document.querySelector('#tag-page');
+
+    if (!tagPage) {
+      return;
+    }
+
+    if (
+      saveObserver &&
+      saveObserverTarget === tagPage
+    ) {
+      return;
+    }
+
+    if (saveObserver) {
+      saveObserver.disconnect();
+    }
+
+    saveObserverTarget = tagPage;
+
+    saveObserver =
+      new MutationObserver(function () {
+        const id = getCurrentTagId();
+
+        if (
+          id !== null &&
+          pendingRelationEdits.has(String(id))
+        ) {
+          enableSaveButton(id);
+        }
+      });
+
+    saveObserver.observe(tagPage, {
+      attributes: true,
+      attributeFilter: ['disabled'],
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function stopSaveObserver() {
+    if (saveObserver) {
+      saveObserver.disconnect();
+      saveObserver = null;
+      saveObserverTarget = null;
+    }
+  }
+
+  /*
    * Stash disables Save whenever formik.dirty is false.
    *
    * The related tags field lives outside Formik, and
@@ -1568,9 +1655,8 @@
    * Enable the button ourselves while a change is
    * pending. It is only ever re-enabled, never
    * re-disabled: Stash re-disables it on its own
-   * whenever its dirty state flips, and the poll
-   * in patchSaveButton restores it if that happens
-   * while our change is still pending.
+   * whenever its dirty state flips, and the observer
+   * plus the poll in patchSaveButton restore it.
    *
    * Returns true when the button is clickable.
    */
@@ -1583,6 +1669,8 @@
     ) {
       return false;
     }
+
+    ensureSaveObserver();
 
     const controls =
       document.querySelector(
@@ -1600,6 +1688,18 @@
 
     if (!saveButton) {
       return false;
+    }
+
+    const props =
+      getReactProps(saveButton);
+
+    if (props && props.disabled) {
+      props.disabled = false;
+
+      log(
+        'Cleared React disabled prop so Save click reaches Stash:',
+        tagId
+      );
     }
 
     if (saveButton.disabled) {
@@ -1903,6 +2003,8 @@
   // ============================================================
 
   function cleanupPluginUI() {
+    stopSaveObserver();
+
     /*
      * Read-only inline mounts.
      */
