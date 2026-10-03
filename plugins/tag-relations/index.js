@@ -595,14 +595,10 @@
      * tag selector.
      */
     return createElement(
-      TagIDSelect,
-      {
-        ids: selectedIds.map(function (id) {
-          return String(id);
-        }),
-
-        onSelect: handleSelect,
-      }
+      'div',
+      null,
+      'TEST: relations = ',
+      JSON.stringify(selectedIds)
     );
   }
 
