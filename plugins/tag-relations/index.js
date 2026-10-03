@@ -507,6 +507,13 @@
     return createElement(
       TagIDSelect,
       {
+        /*
+         * Stash defaults isMulti to false, which
+         * renders a single-value container. Related
+         * tags must render as multi-value chips.
+         */
+        isMulti: true,
+
         ids: selectedIds.map(
           function (id) {
             return String(id);
