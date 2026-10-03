@@ -4,7 +4,9 @@
   const PLUGIN_ID = 'tag-relations';
 
   const INLINE_ITEM_CLASS = 'tag-relations-inline-item';
-  const EDIT_FIELDS_MARKER = 'data-tag-relations-fields';
+  const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
+
+  const EDIT_HOST_MARKER = 'data-tag-relations-host';
   const SAVE_PATCH_MARKER = 'data-tag-relations-save-patched';
 
   const relationCache = new Map();
@@ -44,7 +46,11 @@
       ),
     };
 
-    log('Plugin operation:', operation, variables.args);
+    log(
+      'Plugin operation:',
+      operation,
+      variables.args
+    );
 
     const response = await fetch('/graphql', {
       method: 'POST',
@@ -83,7 +89,10 @@
       result.data &&
       result.data.runPluginOperation;
 
-    if (data === null || data === undefined) {
+    if (
+      data === null ||
+      data === undefined
+    ) {
       throw new Error(
         'Plugin returned an empty response'
       );
@@ -98,22 +107,13 @@
     }
 
     /*
-     * Current plugin operation API:
+     * Current API:
      *
      * {
      *   ok: true,
      *   error: null,
      *   output: {...}
      * }
-     *
-     * Some older versions may return:
-     *
-     * {
-     *   ok: true,
-     *   data: {...}
-     * }
-     *
-     * Support both.
      */
 
     if (
@@ -189,11 +189,12 @@
 
   const createElement = React.createElement;
   const Fragment = React.Fragment;
+
   const useState = React.useState;
   const useEffect = React.useEffect;
 
   // ============================================================
-  // Native Stash Tag selector
+  // Native Stash components
   // ============================================================
 
   function getNativeTagIDSelect() {
@@ -217,113 +218,16 @@
   }
 
   // ============================================================
-  // React mounting
-  // ============================================================
-
-  function mountReact(container, element) {
-    if (!container) {
-      throw new Error(
-        'React mount container is missing'
-      );
-    }
-
-    if (container.__tagRelationsRoot) {
-      container.__tagRelationsRoot.render(
-        element
-      );
-
-      return container.__tagRelationsRoot;
-    }
-
-    /*
-     * Prefer createRoot when available.
-     *
-     * This is deliberately a separate React tree
-     * from Stash's own tree.
-     */
-    if (
-      typeof ReactDOM.createRoot ===
-      'function'
-    ) {
-      const root =
-        ReactDOM.createRoot(container);
-
-      root.render(element);
-
-      container.__tagRelationsRoot = root;
-
-      return root;
-    }
-
-    /*
-     * React 17 compatibility.
-     */
-    if (
-      typeof ReactDOM.render ===
-      'function'
-    ) {
-      ReactDOM.render(
-        element,
-        container
-      );
-
-      container.__tagRelationsLegacy = true;
-
-      return null;
-    }
-
-    throw new Error(
-      'ReactDOM.createRoot/render is unavailable'
-    );
-  }
-
-  function unmountReact(container) {
-    if (!container) {
-      return;
-    }
-
-    if (container.__tagRelationsRoot) {
-      try {
-        container.__tagRelationsRoot.unmount();
-      } catch (error) {
-        logError(
-          'Failed to unmount React root:',
-          error
-        );
-      }
-
-      container.__tagRelationsRoot = null;
-    }
-
-    if (
-      container.__tagRelationsLegacy &&
-      typeof ReactDOM.unmountComponentAtNode ===
-        'function'
-    ) {
-      try {
-        ReactDOM.unmountComponentAtNode(
-          container
-        );
-      } catch (error) {
-        logError(
-          'Failed to unmount legacy React:',
-          error
-        );
-      }
-
-      container.__tagRelationsLegacy = false;
-    }
-  }
-
-  // ============================================================
   // Tag helpers
   // ============================================================
 
   function getCurrentTagId() {
-    const match =
-      window.location.pathname.match(
-        /^\/tags\/(\d+)(?:\/|$)/
-      );
+    const pathname =
+      window.location.pathname;
+
+    const match = pathname.match(
+      /^\/tags\/(\d+)(?:\/|$)/
+    );
 
     if (!match) {
       return null;
@@ -348,9 +252,6 @@
   // ============================================================
 
   function normalizeRelationData(data) {
-    /*
-     * Accept a direct array for compatibility.
-     */
     if (Array.isArray(data)) {
       return data
         .filter(function (tag) {
@@ -393,13 +294,14 @@
     const seen = new Set();
 
     /*
-     * The UI intentionally exposes a single concept:
+     * UI exposes one concept:
      *
      *     Связанные теги
      *
-     * Therefore both old "similar" and current
-     * "related" relations are displayed together.
+     * Old "similar" and current "related"
+     * are therefore combined.
      */
+
     similar
       .concat(related)
       .forEach(function (tag) {
@@ -418,17 +320,24 @@
 
         seen.add(id);
 
+        const numericId =
+          Number(tag.id);
+
+        if (
+          !Number.isFinite(numericId)
+        ) {
+          return;
+        }
+
         result.push({
-          id: Number(tag.id),
+          id: numericId,
           name:
             tag.name ||
             String(tag.id),
         });
       });
 
-    return result.filter(function (tag) {
-      return Number.isFinite(tag.id);
-    });
+    return result;
   }
 
   // ============================================================
@@ -497,18 +406,24 @@
   }
 
   // ============================================================
-  // Related Tags Select
+  // Related Tags selector
+  //
+  // IMPORTANT:
+  //
+  // This component MUST be rendered from inside Stash's
+  // existing React tree. It must NOT be mounted with
+  // createRoot()/ReactDOM.render().
   // ============================================================
 
   function RelatedTagsSelect(props) {
-    const tagId = Number(props.tagId);
+    const tagId =
+      Number(props.tagId);
 
-    const state =
-      useState(
-        Array.isArray(props.initialIds)
-          ? props.initialIds
-          : []
-      );
+    const state = useState(
+      Array.isArray(props.initialIds)
+        ? props.initialIds
+        : []
+    );
 
     const selectedIds = state[0];
     const setSelectedIds = state[1];
@@ -516,26 +431,11 @@
     const TagIDSelect =
       getNativeTagIDSelect();
 
-    useEffect(
-      function () {
-        if (!TagIDSelect) {
-          logError(
-            'PluginApi.components.TagIDSelect is unavailable'
-          );
-        }
-      },
-      []
-    );
-
     function handleSelect(tags) {
-      /*
-       * Native TagIDSelect returns Tag objects.
-       *
-       * Convert them to numeric IDs.
-       */
-      const values = Array.isArray(tags)
-        ? tags
-        : [];
+      const values =
+        Array.isArray(tags)
+          ? tags
+          : [];
 
       const uniqueIds = [];
       const seen = new Set();
@@ -552,8 +452,9 @@
         }
 
         /*
-         * A tag cannot be related to itself.
+         * Prevent self-relation.
          */
+
         if (id === tagId) {
           return;
         }
@@ -572,6 +473,14 @@
         String(tagId),
         uniqueIds
       );
+
+      log(
+        'Related tags changed:',
+        {
+          tagId: tagId,
+          ids: uniqueIds,
+        }
+      );
     }
 
     if (!TagIDSelect) {
@@ -586,19 +495,26 @@
     }
 
     /*
-     * IMPORTANT:
+     * Native Stash TagIDSelect expects IDs.
      *
-     * Do not pass react-select props here.
+     * It internally loads the corresponding Tag
+     * objects through Stash's Apollo context.
      *
-     * TagIDSelect is Stash's own wrapper and
-     * already knows how to render the native
-     * tag selector.
+     * Because this component is rendered through a
+     * React portal, that Apollo context is preserved.
      */
+
     return createElement(
       TagIDSelect,
       {
-        ids: [],
-        onSelect: handleSelect,
+        ids: selectedIds.map(
+          function (id) {
+            return String(id);
+          }
+        ),
+
+        onSelect:
+          handleSelect,
       }
     );
   }
@@ -642,33 +558,32 @@
         let cancelled = false;
 
         /*
-         * If the selector already changed something,
-         * use the local state instead of reloading
-         * from the backend.
+         * If the user already changed the selector,
+         * preserve local state.
          */
+
         const existing =
           editStates.get(
             String(tagId)
           );
 
         /*
-         * null means:
-         *
+         * null:
          *     not loaded yet
          *
-         * [] means:
-         *
+         * []:
          *     loaded, no relations
          */
-        if (
-          Array.isArray(existing)
-        ) {
-          setRelations(
-            existing.map(function (id) {
-              return Number(id);
-            })
-          );
 
+        if (Array.isArray(existing)) {
+          const ids =
+            existing.map(
+              function (id) {
+                return Number(id);
+              }
+            );
+
+          setRelations(ids);
           setLoading(false);
 
           return function () {
@@ -686,9 +601,11 @@
             }
 
             const ids =
-              tags.map(function (tag) {
-                return Number(tag.id);
-              });
+              tags.map(
+                function (tag) {
+                  return Number(tag.id);
+                }
+              );
 
             setRelations(ids);
 
@@ -782,11 +699,242 @@
   }
 
   // ============================================================
+  // React bridge
+  //
+  // This component lives INSIDE Stash's React tree.
+  //
+  // It creates a normal DOM container after Child Tags
+  // and then portals our React UI into that container.
+  //
+  // React context, including Apollo context, survives
+  // the portal.
+  // ============================================================
+
+  function TagRelationsEditBridge(props) {
+    const tagId =
+      Number(props.tagId);
+
+    const enabled =
+      props.enabled === true;
+
+    const targetState =
+      useState(null);
+
+    const target =
+      targetState[0];
+
+    const setTarget =
+      targetState[1];
+
+    useEffect(
+      function () {
+        if (!enabled || !tagId) {
+          setTarget(null);
+          return undefined;
+        }
+
+        const form =
+          document.querySelector(
+            '#tag-page #tag-edit'
+          );
+
+        if (!form) {
+          setTarget(null);
+          return undefined;
+        }
+
+        let container =
+          form.querySelector(
+            '.' +
+              EDIT_FIELDS_CLASS +
+              '[' +
+              EDIT_HOST_MARKER +
+              '="true"]'
+          );
+
+        if (!container) {
+          container =
+            document.createElement(
+              'div'
+            );
+
+          container.className =
+            EDIT_FIELDS_CLASS;
+
+          container.setAttribute(
+            EDIT_HOST_MARKER,
+            'true'
+          );
+
+          const childField =
+            form.querySelector(
+              '[data-field="child_ids"]'
+            );
+
+          if (childField) {
+            childField.insertAdjacentElement(
+              'afterend',
+              container
+            );
+          } else {
+            form.appendChild(
+              container
+            );
+          }
+
+          log(
+            'Created related tags portal host for tag',
+            tagId
+          );
+        }
+
+        if (
+          !editStates.has(
+            String(tagId)
+          )
+        ) {
+          editStates.set(
+            String(tagId),
+            null
+          );
+        }
+
+        setTarget(container);
+
+        /*
+         * The form may disappear when Stash switches
+         * from edit mode back to normal mode.
+         *
+         * The DOM node will then disappear together
+         * with the form.
+         */
+
+        return function () {
+          setTarget(null);
+        };
+      },
+      [enabled, tagId]
+    );
+
+    if (
+      !enabled ||
+      !target
+    ) {
+      return null;
+    }
+
+    /*
+     * THIS IS THE IMPORTANT PART.
+     *
+     * createPortal keeps the React context of the
+     * ImageInput/Stash component tree.
+     */
+
+    return ReactDOM.createPortal(
+      createElement(
+        RelationEditFields,
+        {
+          tagId: tagId,
+        }
+      ),
+      target
+    );
+  }
+
+  // ============================================================
+  // ImageInput patch
+  //
+  // ImageInput is rendered from the native Stash edit tree.
+  // We append our bridge to that same tree.
+  // ============================================================
+
+  if (
+    PluginApi.patch &&
+    typeof PluginApi.patch.after ===
+      'function'
+  ) {
+    PluginApi.patch.after(
+      'ImageInput',
+      function (props, original) {
+        if (
+          !React.isValidElement(
+            original
+          )
+        ) {
+          logError(
+            'ImageInput patch received invalid React result:',
+            original
+          );
+
+          return original;
+        }
+
+        const tagId =
+          getCurrentTagId();
+
+        /*
+         * Only inject into the Tag edit page.
+         */
+
+        const enabled =
+          !!(
+            tagId &&
+            props &&
+            props.isEditing === true
+          );
+
+        if (!enabled) {
+          return original;
+        }
+
+        log(
+          'Injecting related tags bridge into Tag edit tree:',
+          tagId
+        );
+
+        return createElement(
+          Fragment,
+          null,
+
+          original,
+
+          createElement(
+            TagRelationsEditBridge,
+            {
+              key:
+                'tag-relations-edit-' +
+                tagId,
+
+              tagId:
+                tagId,
+
+              enabled:
+                true,
+            }
+          )
+        );
+      }
+    );
+
+    log(
+      'ImageInput patch installed'
+    );
+  } else {
+    logError(
+      'PluginApi.patch.after is unavailable'
+    );
+  }
+
+  // ============================================================
   // Inline view
+  //
+  // This component does NOT need Apollo context, so it can
+  // safely be mounted separately.
   // ============================================================
 
   function RelatedTagsInline(props) {
-    const tagId = props.tagId;
+    const tagId =
+      props.tagId;
 
     const state =
       useState(null);
@@ -834,10 +982,6 @@
       [tagId]
     );
 
-    /*
-     * Normal tag page should not expose backend
-     * errors directly.
-     */
     if (error) {
       return null;
     }
@@ -861,35 +1005,143 @@
       Fragment,
       null,
 
-      relations.map(function (tag) {
-        return createElement(
-          'span',
-          {
-            key: tag.id,
-
-            'data-sort-name':
-              tag.name,
-
-            className:
-              'tag-item tag-link badge badge-secondary',
-          },
-
-          createElement(
-            'a',
+      relations.map(
+        function (tag) {
+          return createElement(
+            'span',
             {
-              href:
-                getTagUrl(tag.id),
+              key: tag.id,
+
+              'data-sort-name':
+                tag.name,
+
+              className:
+                'tag-item tag-link badge badge-secondary',
             },
 
             createElement(
-              'div',
-              null,
-              tag.name
+              'a',
+              {
+                href:
+                  getTagUrl(tag.id),
+              },
+
+              createElement(
+                'div',
+                null,
+                tag.name
+              )
             )
-          )
-        );
-      })
+          );
+        }
+      )
     );
+  }
+
+  // ============================================================
+  // Separate React mounting
+  //
+  // Used ONLY for the normal read-only tag page.
+  // Never use this for TagIDSelect.
+  // ============================================================
+
+  function mountReact(
+    container,
+    element
+  ) {
+    if (!container) {
+      throw new Error(
+        'React mount container is missing'
+      );
+    }
+
+    if (
+      container.__tagRelationsRoot
+    ) {
+      container.__tagRelationsRoot.render(
+        element
+      );
+
+      return container.__tagRelationsRoot;
+    }
+
+    if (
+      typeof ReactDOM.createRoot ===
+      'function'
+    ) {
+      const root =
+        ReactDOM.createRoot(
+          container
+        );
+
+      root.render(element);
+
+      container.__tagRelationsRoot =
+        root;
+
+      return root;
+    }
+
+    if (
+      typeof ReactDOM.render ===
+      'function'
+    ) {
+      ReactDOM.render(
+        element,
+        container
+      );
+
+      container.__tagRelationsLegacy =
+        true;
+
+      return null;
+    }
+
+    throw new Error(
+      'ReactDOM.createRoot/render is unavailable'
+    );
+  }
+
+  function unmountReact(container) {
+    if (!container) {
+      return;
+    }
+
+    if (
+      container.__tagRelationsRoot
+    ) {
+      try {
+        container.__tagRelationsRoot.unmount();
+      } catch (error) {
+        logError(
+          'Failed to unmount React root:',
+          error
+        );
+      }
+
+      container.__tagRelationsRoot =
+        null;
+    }
+
+    if (
+      container.__tagRelationsLegacy &&
+      typeof ReactDOM.unmountComponentAtNode ===
+        'function'
+    ) {
+      try {
+        ReactDOM.unmountComponentAtNode(
+          container
+        );
+      } catch (error) {
+        logError(
+          'Failed to unmount legacy React:',
+          error
+        );
+      }
+
+      container.__tagRelationsLegacy =
+        false;
+    }
   }
 
   // ============================================================
@@ -908,7 +1160,8 @@
 
     let item =
       detailGroup.querySelector(
-        '.' + INLINE_ITEM_CLASS
+        '.' +
+          INLINE_ITEM_CLASS
       );
 
     if (item) {
@@ -934,7 +1187,9 @@
     }
 
     item =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
     item.className =
       'detail-item ' +
@@ -946,7 +1201,9 @@
     );
 
     const title =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     title.className =
       'detail-item-title';
@@ -955,13 +1212,17 @@
       'Связанные теги:';
 
     const value =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     value.className =
       'detail-item-value';
 
     const mount =
-      document.createElement('span');
+      document.createElement(
+        'span'
+      );
 
     mount.className =
       'tag-relations-inline-mount';
@@ -976,11 +1237,9 @@
     item.appendChild(value);
 
     /*
-     * Put the field after Sub Tags.
-     *
-     * If Sub Tags are unavailable, fall back to
-     * Parent Tags.
+     * Put after Sub Tags.
      */
+
     const subTags =
       detailGroup.querySelector(
         '.detail-item.sub_tags'
@@ -1011,7 +1270,8 @@
         createElement(
           RelatedTagsInline,
           {
-            tagId: String(tagId),
+            tagId:
+              String(tagId),
           }
         )
       );
@@ -1026,121 +1286,13 @@
   }
 
   // ============================================================
-  // Edit view
+  // Native Save button
   // ============================================================
 
-  function installEditFields(tagId) {
-    const form =
-      document.querySelector(
-        '#tag-page #tag-edit'
-      );
-
-    if (!form) {
-      return;
-    }
-
-    /*
-     * Do not create the component twice.
-     */
-    if (
-      form.hasAttribute(
-        EDIT_FIELDS_MARKER
-      )
-    ) {
-      return;
-    }
-
-    const fieldsContainer =
-      document.createElement('div');
-
-    fieldsContainer.className =
-      'tag-relations-edit-fields';
-
-    fieldsContainer.setAttribute(
-      EDIT_FIELDS_MARKER,
-      'true'
-    );
-
-    /*
-     * Put Related Tags immediately after
-     * the native Child Tags field.
-     *
-     * We only manipulate the DOM here.
-     *
-     * No portal.
-     * No Stash React tree injection.
-     */
-    const childField =
-      form.querySelector(
-        '[data-field="child_ids"]'
-      );
-
-    if (childField) {
-      childField.insertAdjacentElement(
-        'afterend',
-        fieldsContainer
-      );
-    } else {
-      /*
-       * Fallback in case Stash changes its
-       * field structure.
-       */
-      form.appendChild(
-        fieldsContainer
-      );
-    }
-
-    /*
-     * null means that relations haven't been
-     * loaded yet.
-     */
-    if (
-      !editStates.has(
-        String(tagId)
-      )
-    ) {
-      editStates.set(
-        String(tagId),
-        null
-      );
-    }
-
-    try {
-      mountReact(
-        fieldsContainer,
-
-        createElement(
-          RelationEditFields,
-          {
-            tagId: tagId,
-          }
-        )
-      );
-    } catch (error) {
-      logError(
-        'Failed to mount relation edit fields:',
-        error
-      );
-
-      fieldsContainer.remove();
-
-      return;
-    }
-
-    /*
-     * Hook into the existing Stash Save button.
-     */
-    patchSaveButton(
-      tagId,
-      form
-    );
-  }
-
-  // ============================================================
-  // Save
-  // ============================================================
-
-  function patchSaveButton(tagId, form) {
+  function patchSaveButton(
+    tagId,
+    form
+  ) {
     const controls =
       document.querySelector(
         '#tag-page .details-edit'
@@ -1159,10 +1311,6 @@
       return;
     }
 
-    /*
-     * Avoid attaching the listener repeatedly
-     * during polling.
-     */
     if (
       saveButton.hasAttribute(
         SAVE_PATCH_MARKER
@@ -1177,12 +1325,14 @@
     );
 
     /*
-     * Capture the click before Stash's native
-     * handler.
+     * Capture phase.
+     *
+     * This runs before Stash's native save
+     * handler, but does not prevent it.
      */
+
     saveButton.addEventListener(
       'click',
-
       function () {
         const key =
           String(tagId);
@@ -1191,9 +1341,10 @@
           editStates.get(key);
 
         /*
-         * If relations haven't loaded yet, don't
-         * overwrite anything in the backend.
+         * Never overwrite relations if the
+         * initial relation query has not completed.
          */
+
         if (!Array.isArray(state)) {
           log(
             'Save clicked before relations finished loading'
@@ -1214,13 +1365,17 @@
               );
             });
 
+        log(
+          'Native Save clicked; captured related tags:',
+          relationIds
+        );
+
         waitForNativeSave(
           tagId,
           form,
           relationIds
         );
       },
-
       true
     );
 
@@ -1249,12 +1404,10 @@
         ) === form;
 
       /*
-       * Stash normally removes the edit form after
-       * a successful save.
-       *
-       * Once it disappears, synchronize our own
-       * relation data.
+       * Successful Stash save normally destroys
+       * the edit form.
        */
+
       if (!stillInDOM) {
         syncRelationsAfterNativeSave(
           tagId,
@@ -1296,33 +1449,36 @@
       log(
         'Synchronizing related tags:',
         {
-          tagId: Number(tagId),
-          related: relationIds,
+          tagId:
+            Number(tagId),
+
+          related:
+            relationIds,
         }
       );
 
       /*
-       * The UI exposes only one relation concept:
+       * UI has only one relation type:
        *
        *     Связанные теги
        *
-       * Therefore:
+       * Therefore all selected IDs are stored
+       * as "related".
        *
-       *     similar_ids = []
-       *     related_ids = selected tags
-       *
-       * This also converts any old "similar"
-       * relations into the unified "related"
-       * representation.
+       * Existing "similar" relations are cleared.
        */
+
       await runPluginOperation(
         'set_relations',
         {
-          tag_id: Number(tagId),
+          tag_id:
+            Number(tagId),
 
-          similar_ids: [],
+          similar_ids:
+            [],
 
-          related_ids: relationIds,
+          related_ids:
+            relationIds,
         }
       );
 
@@ -1356,11 +1512,13 @@
 
   function cleanupPluginUI() {
     /*
-     * Inline relations.
+     * Read-only inline mounts.
      */
+
     document
       .querySelectorAll(
-        '.' + INLINE_ITEM_CLASS
+        '.' +
+          INLINE_ITEM_CLASS
       )
       .forEach(function (element) {
         const mount =
@@ -1376,15 +1534,30 @@
       });
 
     /*
-     * Edit relations.
+     * Edit portal hosts.
+     *
+     * The React component itself is owned by
+     * Stash's React tree, so we do NOT unmount
+     * it manually here.
+     *
+     * We only remove stale DOM hosts if they
+     * are still present.
      */
+
     document
       .querySelectorAll(
-        '.tag-relations-edit-fields'
+        '.' +
+          EDIT_FIELDS_CLASS +
+          '[' +
+          EDIT_HOST_MARKER +
+          '="true"]'
       )
       .forEach(function (element) {
-        unmountReact(element);
-        element.remove();
+        if (
+          element.isConnected
+        ) {
+          element.remove();
+        }
       });
 
     editStates.clear();
@@ -1399,8 +1572,9 @@
       getCurrentTagId();
 
     /*
-     * We are no longer on a tag page.
+     * Not on a tag page.
      */
+
     if (!tagId) {
       if (
         currentTagId !== null
@@ -1415,6 +1589,7 @@
     /*
      * Different tag.
      */
+
     if (
       currentTagId !== null &&
       currentTagId !== tagId
@@ -1439,10 +1614,19 @@
       );
 
     /*
-     * Edit mode.
+     * IMPORTANT:
+     *
+     * Edit UI is now injected through the
+     * ImageInput React patch.
+     *
+     * We do NOT mount another React tree here.
      */
+
     if (editForm) {
-      installEditFields(tagId);
+      patchSaveButton(
+        tagId,
+        editForm
+      );
 
       return;
     }
@@ -1450,7 +1634,10 @@
     /*
      * Normal view.
      */
-    installInlineRelations(tagId);
+
+    installInlineRelations(
+      tagId
+    );
   }
 
   // ============================================================
@@ -1473,9 +1660,9 @@
         'stash:location',
         function () {
           /*
-           * Let Stash finish rendering the new
-           * page before scanning it.
+           * Allow Stash to finish rendering.
            */
+
           setTimeout(
             scanTagPage,
             0
@@ -1483,7 +1670,8 @@
         }
       );
 
-      routeListenerInstalled = true;
+      routeListenerInstalled =
+        true;
 
       log(
         'Stash route listener installed'
@@ -1502,13 +1690,6 @@
       );
     }
 
-    /*
-     * Stash changes between view/edit mode without
-     * necessarily triggering a full location change.
-     *
-     * Polling keeps this compatible with the old
-     * working implementation.
-     */
     editScanTimer =
       setInterval(
         function () {
@@ -1526,114 +1707,6 @@
   }
 
   // ============================================================
-  // Standalone route
-  // ============================================================
-
-  function TagRelationsPage() {
-    const relationsState =
-      useState([]);
-
-    const relations =
-      relationsState[0];
-
-    const setRelations =
-      relationsState[1];
-
-    const loadingState =
-      useState(false);
-
-    const loading =
-      loadingState[0];
-
-    const setLoading =
-      loadingState[1];
-
-    useEffect(
-      function () {
-        let cancelled = false;
-
-        setLoading(true);
-
-        runPluginOperation(
-          'export_relations'
-        )
-          .then(function (data) {
-            if (
-              !cancelled &&
-              data &&
-              Array.isArray(
-                data.relations
-              )
-            ) {
-              setRelations(
-                data.relations
-              );
-            }
-          })
-          .catch(function (error) {
-            if (!cancelled) {
-              logError(
-                'Failed to load relations:',
-                error
-              );
-            }
-          })
-          .finally(function () {
-            if (!cancelled) {
-              setLoading(false);
-            }
-          });
-
-        return function () {
-          cancelled = true;
-        };
-      },
-      []
-    );
-
-    return createElement(
-      'div',
-      {
-        className:
-          'tag-relations-page',
-      },
-
-      createElement(
-        'h2',
-        null,
-        'Tag Relations'
-      ),
-
-      loading
-        ? createElement(
-            'div',
-            null,
-            'Loading...'
-          )
-        : createElement(
-            'div',
-            null,
-            'Relations: ' +
-              relations.length
-          )
-    );
-  }
-
-  // ============================================================
-  // Route
-  // ============================================================
-
-  if (
-    PluginApi.register &&
-    PluginApi.register.route
-  ) {
-    PluginApi.register.route(
-      '/plugin/tag-relations',
-      TagRelationsPage
-    );
-  }
-
-  // ============================================================
   // Start
   // ============================================================
 
@@ -1643,5 +1716,7 @@
 
   scanTagPage();
 
-  log('loaded');
+  log(
+    'loaded'
+  );
 })();
