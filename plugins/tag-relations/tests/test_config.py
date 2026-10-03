@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.config import (
     Config,
@@ -17,14 +17,18 @@ from backend.errors import PluginError
 
 class TestSessionCookieHeader:
     def test_dict_cookie(self):
-        assert _session_cookie_header({
-            "SessionCookie": {"Name": "session", "Value": "abc123"}
-        }) == "session=abc123"
+        assert (
+            _session_cookie_header(
+                {"SessionCookie": {"Name": "session", "Value": "abc123"}}
+            )
+            == "session=abc123"
+        )
 
     def test_string_cookie(self):
-        assert _session_cookie_header({
-            "SessionCookie": "session=abc123"
-        }) == "session=abc123"
+        assert (
+            _session_cookie_header({"SessionCookie": "session=abc123"})
+            == "session=abc123"
+        )
 
     def test_missing_cookie(self):
         assert _session_cookie_header({}) is None
@@ -33,22 +37,18 @@ class TestSessionCookieHeader:
         assert _session_cookie_header({"SessionCookie": None}) is None
 
     def test_empty_dict_cookie(self):
-        assert _session_cookie_header({
-            "SessionCookie": {"Name": "", "Value": ""}
-        }) is None
+        assert (
+            _session_cookie_header({"SessionCookie": {"Name": "", "Value": ""}}) is None
+        )
 
 
 class TestApiKeyFromStashConfig:
     def test_reads_top_level_api_key(self, tmp_path):
         (tmp_path / "config.yml").write_text(
-            "host: 0.0.0.0\n"
-            "api_key: secret-key\n"
-            "password: something\n"
+            "host: 0.0.0.0\napi_key: secret-key\npassword: something\n"
         )
 
-        assert _api_key_from_stash_config({
-            "Dir": str(tmp_path)
-        }) == "secret-key"
+        assert _api_key_from_stash_config({"Dir": str(tmp_path)}) == "secret-key"
 
     def test_ignores_indented_keys(self, tmp_path):
         (tmp_path / "config.yml").write_text(
@@ -60,14 +60,10 @@ class TestApiKeyFromStashConfig:
             "            api_key: plugin-key\n"
         )
 
-        assert _api_key_from_stash_config({
-            "Dir": str(tmp_path)
-        }) is None
+        assert _api_key_from_stash_config({"Dir": str(tmp_path)}) is None
 
     def test_missing_config_file(self, tmp_path):
-        assert _api_key_from_stash_config({
-            "Dir": str(tmp_path)
-        }) is None
+        assert _api_key_from_stash_config({"Dir": str(tmp_path)}) is None
 
     def test_missing_dir(self):
         assert _api_key_from_stash_config({}) is None
@@ -76,9 +72,7 @@ class TestApiKeyFromStashConfig:
         config_file = tmp_path / "config.yml"
         config_file.write_text("api_key: from-file\n")
 
-        assert _api_key_from_stash_config({
-            "Dir": str(config_file)
-        }) == "from-file"
+        assert _api_key_from_stash_config({"Dir": str(config_file)}) == "from-file"
 
 
 class TestLoadConfig:

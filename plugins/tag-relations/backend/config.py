@@ -85,16 +85,14 @@ def load_config(
 
     # Otherwise derive the URL from Stash's server_connection.
     if not stash_url:
-        scheme = str(
-            server_connection.get("Scheme", "http")
-        ).strip()
+        scheme = str(server_connection.get("Scheme", "http")).strip()
 
         port = server_connection.get("Port")
 
         if not port:
             raise PluginError(
+                code="MISSING_PORT",
                 message="Stash server port is not available in plugin input.",
-                code=500,
             )
 
         stash_url = f"{scheme}://127.0.0.1:{port}"
@@ -111,7 +109,5 @@ def load_config(
         database_path=db_path,
         stash_url=stash_url.rstrip("/"),
         stash_api_key=api_key,
-        stash_session_cookie=_session_cookie_header(
-            server_connection
-        ),
+        stash_session_cookie=_session_cookie_header(server_connection),
     )

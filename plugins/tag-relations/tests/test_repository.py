@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.db.database import init_db
 from backend.db.repository import RelationRepository
@@ -13,7 +13,7 @@ from backend.errors import DuplicateRelationError, RelationNotFoundError
 
 @pytest.fixture
 def db_path():
-    with tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
         path = f.name
     yield path
     if os.path.exists(path):
@@ -100,7 +100,9 @@ class TestRelationRepository:
         assert updated == 1  # Only one relation involved tag 30
 
         relations = repo.list_all()
-        similar_relations = [r for r in relations if r.relation_type == RelationType.SIMILAR]
+        similar_relations = [
+            r for r in relations if r.relation_type == RelationType.SIMILAR
+        ]
         assert len(similar_relations) == 1
         assert similar_relations[0].tag_a_id == 10
         assert similar_relations[0].tag_b_id == 20

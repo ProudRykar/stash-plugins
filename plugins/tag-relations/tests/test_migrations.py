@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.db.database import init_db, get_schema_version, MIGRATIONS
 from backend.db.repository import RelationRepository
@@ -13,7 +13,7 @@ from backend.errors import DuplicateRelationError
 
 @pytest.fixture
 def db_path():
-    with tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
         path = f.name
     yield path
     if os.path.exists(path):
@@ -45,15 +45,18 @@ class TestMigrations:
     def test_indexes_created(self, db_path):
         init_db(db_path)
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_tag_relations%'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_tag_relations%'"
+        )
         indexes = [row[0] for row in cursor.fetchall()]
         conn.close()
 
-        assert 'idx_tag_relations_a' in indexes
-        assert 'idx_tag_relations_b' in indexes
-        assert 'idx_tag_relations_type' in indexes
+        assert "idx_tag_relations_a" in indexes
+        assert "idx_tag_relations_b" in indexes
+        assert "idx_tag_relations_type" in indexes
 
     def test_constraints_enforced(self, db_path):
         init_db(db_path)
@@ -70,17 +73,19 @@ class TestMigrations:
     def test_wal_mode_enabled(self, db_path):
         init_db(db_path)
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA journal_mode")
         mode = cursor.fetchone()[0]
         conn.close()
 
-        assert mode.upper() == 'WAL'
+        assert mode.upper() == "WAL"
 
     def test_foreign_keys_enabled(self, db_path):
         init_db(db_path)
         from backend.db.database import get_connection
+
         conn = get_connection(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys")

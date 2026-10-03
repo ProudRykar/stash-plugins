@@ -4,11 +4,18 @@ import tempfile
 from unittest.mock import Mock, MagicMock, patch
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.db.database import init_db
 from backend.db.repository import RelationRepository
-from backend.models import TagRelation, RelationType, Tag, RelationsResult, ValidationResult, ExportData
+from backend.models import (
+    TagRelation,
+    RelationType,
+    Tag,
+    RelationsResult,
+    ValidationResult,
+    ExportData,
+)
 from backend.services.relations import RelationService
 from backend.config import Config
 from backend.errors import TagNotFoundError, ValidationError, DuplicateRelationError
@@ -16,7 +23,7 @@ from backend.errors import TagNotFoundError, ValidationError, DuplicateRelationE
 
 @pytest.fixture
 def db_path():
-    with tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
         path = f.name
     yield path
     if os.path.exists(path):

@@ -83,9 +83,7 @@ def success_response(data: Any = None) -> dict:
 
 
 def get_plugin_dir() -> str:
-    return os.path.dirname(
-        os.path.abspath(__file__)
-    )
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_settings(input_data: dict) -> dict:
@@ -156,8 +154,7 @@ def dispatch_operation(input_data: dict) -> dict:
     )
 
     logger.info(
-        "Config: database_path=%r stash_url=%r api_key=%s "
-        "session_cookie=%s",
+        "Config: database_path=%r stash_url=%r api_key=%s session_cookie=%s",
         config.database_path,
         config.stash_url,
         bool(config.stash_api_key),
@@ -183,9 +180,7 @@ def dispatch_operation(input_data: dict) -> dict:
             tag_id = hook_context.get("id")
 
             if tag_id:
-                count = sync.handle_tag_destroyed(
-                    int(tag_id)
-                )
+                count = sync.handle_tag_destroyed(int(tag_id))
 
                 return success_response(
                     {
@@ -194,12 +189,8 @@ def dispatch_operation(input_data: dict) -> dict:
                 )
 
         elif hook_type == "Tag.Merge.Post":
-            source_id = hook_context.get(
-                "source_id"
-            )
-            destination_id = hook_context.get(
-                "destination_id"
-            )
+            source_id = hook_context.get("source_id")
+            destination_id = hook_context.get("destination_id")
 
             if source_id and destination_id:
                 count = sync.handle_tag_merged(
@@ -250,9 +241,7 @@ def dispatch_operation(input_data: dict) -> dict:
                     "tag_id required",
                 )
 
-            result = service.list_relations(
-                int(tag_id)
-            )
+            result = service.list_relations(int(tag_id))
 
             return success_response(
                 {
@@ -274,19 +263,11 @@ def dispatch_operation(input_data: dict) -> dict:
             )
 
         elif operation == "create_relation":
-            tag_a_id = (
-                args.get("tag_a_id")
-                or args.get("source_tag_id")
-            )
+            tag_a_id = args.get("tag_a_id") or args.get("source_tag_id")
 
-            tag_b_id = (
-                args.get("tag_b_id")
-                or args.get("target_tag_id")
-            )
+            tag_b_id = args.get("tag_b_id") or args.get("target_tag_id")
 
-            relation_type = args.get(
-                "relation_type"
-            )
+            relation_type = args.get("relation_type")
 
             if not all(
                 [
@@ -306,24 +287,14 @@ def dispatch_operation(input_data: dict) -> dict:
                 RelationType(relation_type),
             )
 
-            return success_response(
-                relation.to_dict()
-            )
+            return success_response(relation.to_dict())
 
         elif operation == "update_relation":
-            tag_a_id = (
-                args.get("tag_a_id")
-                or args.get("source_tag_id")
-            )
+            tag_a_id = args.get("tag_a_id") or args.get("source_tag_id")
 
-            tag_b_id = (
-                args.get("tag_b_id")
-                or args.get("target_tag_id")
-            )
+            tag_b_id = args.get("tag_b_id") or args.get("target_tag_id")
 
-            relation_type = args.get(
-                "relation_type"
-            )
+            relation_type = args.get("relation_type")
 
             if not all(
                 [
@@ -343,24 +314,14 @@ def dispatch_operation(input_data: dict) -> dict:
                 RelationType(relation_type),
             )
 
-            return success_response(
-                relation.to_dict()
-            )
+            return success_response(relation.to_dict())
 
         elif operation == "delete_relation":
-            tag_a_id = (
-                args.get("tag_a_id")
-                or args.get("source_tag_id")
-            )
+            tag_a_id = args.get("tag_a_id") or args.get("source_tag_id")
 
-            tag_b_id = (
-                args.get("tag_b_id")
-                or args.get("target_tag_id")
-            )
+            tag_b_id = args.get("tag_b_id") or args.get("target_tag_id")
 
-            relation_type = args.get(
-                "relation_type"
-            )
+            relation_type = args.get("relation_type")
 
             if not all(
                 [
@@ -407,14 +368,8 @@ def dispatch_operation(input_data: dict) -> dict:
 
             result = service.set_relations(
                 int(tag_id),
-                [
-                    int(x)
-                    for x in similar_ids
-                ],
-                [
-                    int(x)
-                    for x in related_ids
-                ],
+                [int(x) for x in similar_ids],
+                [int(x) for x in related_ids],
             )
 
             return success_response(
@@ -439,9 +394,7 @@ def dispatch_operation(input_data: dict) -> dict:
         elif operation == "validate_relations":
             result = service.validate_all()
 
-            return success_response(
-                result.to_dict()
-            )
+            return success_response(result.to_dict())
 
         elif operation == "remove_broken_relations":
             count = service.remove_broken_relations()
@@ -455,9 +408,7 @@ def dispatch_operation(input_data: dict) -> dict:
         elif operation == "export_relations":
             result = service.export_relations()
 
-            return success_response(
-                result.to_dict()
-            )
+            return success_response(result.to_dict())
 
         elif operation == "import_relations":
             relations_data = args.get(
@@ -572,18 +523,14 @@ def main() -> int:
             write_output(result)
             return 1
 
-        result = dispatch_operation(
-            input_data
-        )
+        result = dispatch_operation(input_data)
 
         write_output(result)
 
         return 0 if result.get("ok") else 1
 
     except Exception as e:
-        logger.exception(
-            "Fatal plugin error"
-        )
+        logger.exception("Fatal plugin error")
 
         result = error_response(
             "FATAL_ERROR",

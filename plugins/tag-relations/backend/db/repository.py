@@ -1,7 +1,6 @@
 import sqlite3
 import logging
 from datetime import datetime
-from typing import Optional
 from backend.models import TagRelation, RelationType
 from backend.errors import (
     RelationNotFoundError,
@@ -37,12 +36,16 @@ class RelationRepository:
             except sqlite3.IntegrityError as e:
                 if "UNIQUE constraint failed" in str(e) or "PRIMARY KEY" in str(e):
                     raise DuplicateRelationError(
-                        relation.tag_a_id, relation.tag_b_id, relation.relation_type.value
+                        relation.tag_a_id,
+                        relation.tag_b_id,
+                        relation.relation_type.value,
                     )
                 raise DatabaseError(str(e))
             return relation
 
-    def get(self, tag_a_id: int, tag_b_id: int, relation_type: RelationType) -> TagRelation:
+    def get(
+        self, tag_a_id: int, tag_b_id: int, relation_type: RelationType
+    ) -> TagRelation:
         if tag_a_id > tag_b_id:
             tag_a_id, tag_b_id = tag_b_id, tag_a_id
 
@@ -205,7 +208,10 @@ class RelationRepository:
     def count_by_type(self, relation_type: RelationType) -> int:
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as c FROM tag_relations WHERE relation_type = ?", (relation_type.value,))
+            cursor.execute(
+                "SELECT COUNT(*) as c FROM tag_relations WHERE relation_type = ?",
+                (relation_type.value,),
+            )
             return cursor.fetchone()["c"]
 
     def delete_all(self) -> int:

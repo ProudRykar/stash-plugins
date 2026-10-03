@@ -1,0 +1,910 @@
+# ============================================================
+# Stash Plugin / Extension
+# Generic production .gitignore
+# ============================================================
+
+
+# ============================================================
+# Python
+# ============================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# setuptools / packaging metadata
+*.egg-info/
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+
+
+# ============================================================
+# Python Virtual Environments
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Alternative environment names
+.virtualenv/
+.python-version.local
+
+
+# ============================================================
+# Python Tooling / Type Checkers
+# ============================================================
+
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+.pyright/
+.pyrightcache/
+
+.ruff_cache/
+
+.pyre/
+.pytype/
+
+.pyre_configuration.local
+
+
+# ============================================================
+# Testing
+# ============================================================
+
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+coverage.html
+htmlcov/
+
+# Test reports
+test-results/
+test-results.xml
+junit.xml
+pytest.xml
+
+
+# ============================================================
+# Python profiling / debugging
+# ============================================================
+
+*.prof
+*.profile
+.profraw
+.profdata
+
+.pytest_cache/
+
+
+# ============================================================
+# Jupyter
+# ============================================================
+
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+
+# ============================================================
+# Node.js
+# ============================================================
+
+node_modules/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+.npm/
+.yarn/
+.pnpm-store/
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# npm
+.npmrc.local
+
+# pnpm
+.pnpm-debug.log
+
+
+# ============================================================
+# JavaScript / TypeScript build output
+# ============================================================
+
+dist/
+build/
+out/
+lib/
+coverage/
+
+*.tsbuildinfo
+
+# Bundler caches
+.eslintcache
+.stylelintcache
+
+.parcel-cache/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+.turbo/
+.cache/
+
+# Webpack
+.webpack/
+
+# Rollup
+.rollup.cache/
+
+
+# ============================================================
+# Frontend generated files
+# ============================================================
+
+public/build/
+public/dist/
+
+*.bundle.js
+*.bundle.js.map
+
+*.min.js.map
+*.map
+
+
+# ============================================================
+# Source maps
+# ============================================================
+
+*.js.map
+*.css.map
+
+
+# ============================================================
+# Logs
+# ============================================================
+
+*.log
+*.log.*
+logs/
+log/
+tmp/
+temp/
+
+
+# ============================================================
+# Runtime files
+# ============================================================
+
+*.pid
+*.pid.lock
+*.seed
+
+*.sock
+*.socket
+
+run/
+runtime/
+
+
+# ============================================================
+# Environment / local configuration
+# ============================================================
+
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+
+*.local
+*.local.json
+*.local.yaml
+*.local.yml
+*.local.toml
+
+# Local secrets
+secrets/
+.secret/
+.secrets/
+
+*.secret
+*.secrets
+
+# Credentials
+credentials.json
+credentials.yaml
+credentials.yml
+credentials.toml
+
+# API keys / tokens
+apikeys.json
+api_keys.json
+tokens.json
+token.json
+
+
+# ============================================================
+# Stash local configuration
+# ============================================================
+
+# Local Stash configuration
+stash.local.yml
+stash.local.yaml
+stash.local.json
+
+# Local development configuration
+config.local.yml
+config.local.yaml
+config.local.json
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Stash development/runtime data
+stash-data/
+stash-data-local/
+.stash/
+stash-local/
+
+
+# ============================================================
+# SQLite
+# ============================================================
+
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+
+# SQLite backups
+*.sqlite.bak
+*.sqlite3.bak
+
+
+# ============================================================
+# Databases / local development
+# ============================================================
+
+data/
+data-local/
+local-data/
+database/
+databases/
+
+*.dump
+*.sql.bak
+
+
+# ============================================================
+# IDE - VS Code
+# ============================================================
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+*.code-workspace
+
+# VS Code history
+.history/
+
+
+# ============================================================
+# JetBrains
+# ============================================================
+
+.idea/
+
+*.iml
+*.iws
+*.ipr
+
+# JetBrains local data
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries/
+.idea/**/shelf/
+
+
+# ============================================================
+# Visual Studio
+# ============================================================
+
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+*.VC.db
+*.VC.VC.opendb
+
+
+# ============================================================
+# Vim
+# ============================================================
+
+*.swp
+*.swo
+*.swn
+*.bak
+
+# Vim swap files
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+
+
+# ============================================================
+# Emacs
+# ============================================================
+
+*~
+\#*\#
+.\#*
+
+.#*
+*.elc
+
+
+# ============================================================
+# Sublime Text
+# ============================================================
+
+*.sublime-workspace
+*.sublime-project
+
+
+# ============================================================
+# Nano
+# ============================================================
+
+.nano_history
+
+
+# ============================================================
+# OS generated files
+# ============================================================
+
+# Linux
+*~
+.directory
+.Trash-*
+.fuse_hidden*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# macOS Finder
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+Desktop.ini
+
+$RECYCLE.BIN/
+
+# Windows installer leftovers
+*.stackdump
+
+
+# ============================================================
+# Temporary files
+# ============================================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.old
+*.orig
+*.rej
+
+*.cache
+*.cached
+
+*.lock.tmp
+
+# Generic editor backups
+*.backup
+*.backup.*
+*.save
+
+
+# ============================================================
+# Generated documentation
+# ============================================================
+
+_site/
+site/
+docs/_build/
+docs/.cache/
+
+# Generated API documentation
+docs/generated/
+docs/api/
+
+
+# ============================================================
+# Static analysis / tooling caches
+# ============================================================
+
+.pytest_cache/
+.mypy_cache/
+.pyrightcache/
+.ruff_cache/
+.eslintcache/
+.stylelintcache/
+
+.bandit/
+.sonar/
+.sonar_cache/
+
+# Semgrep
+.semgrep/
+
+
+# ============================================================
+# Security scanners
+# ============================================================
+
+.bandit/
+.safety/
+
+
+# ============================================================
+# Docker
+# ============================================================
+
+.docker/
+
+docker-data/
+docker-volumes/
+
+# Local Docker overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Docker environment files
+.docker.env
+.docker.env.*
+
+
+# ============================================================
+# Generated assets
+# ============================================================
+
+generated/
+generated-assets/
+generated-assets-local/
+
+tmp-assets/
+cache-assets/
+
+# Image processing caches
+.thumbnail/
+.thumbnails/
+
+# Generated frontend assets
+assets/generated/
+assets/cache/
+
+
+# ============================================================
+# Archives
+# ============================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.tar.xz
+*.txz
+*.rar
+*.7z
+
+
+# ============================================================
+# Local plugin packages
+# ============================================================
+
+*.plugin.zip
+*.plugin.tar
+*.plugin.tar.gz
+
+# Stash plugin build artifacts
+plugin-build/
+plugin-dist/
+release/
+releases/
+
+
+# ============================================================
+# Local development scripts / scratch files
+# ============================================================
+
+scratch/
+scratchpad/
+sandbox/
+experiments/
+playground/
+
+# Temporary scripts
+tmp_*.py
+tmp_*.js
+tmp_*.ts
+
+test_*.local.py
+debug_*.py
+debug_*.js
+
+
+# ============================================================
+# Generated GraphQL / API artifacts
+# ============================================================
+
+graphql-generated/
+graphql-codegen/
+generated/graphql/
+generated-api/
+
+*.graphql.generated
+*.gql.generated
+
+
+# ============================================================
+# Local API dumps
+# ============================================================
+
+api-dumps/
+graphql-dumps/
+responses/
+responses-local/
+
+*.response.json
+*.response.txt
+*.dump.json
+
+
+# ============================================================
+# Browser / frontend debugging
+# ============================================================
+
+.har/
+*.har
+
+screenshots/
+debug-screenshots/
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
+# Cypress
+.cypress/
+cypress/videos/
+cypress/screenshots/
+
+
+# ============================================================
+# Package manager caches
+# ============================================================
+
+.cache/
+.cache-loader/
+
+# pnpm
+.pnpm-debug.log*
+
+# Bun
+.bun/
+
+# Deno
+.deno/
+
+
+# ============================================================
+# Rust / Go / C / native tooling
+# ============================================================
+
+# In case native helper components are introduced later
+target/
+bin/
+obj/
+
+*.o
+*.a
+*.dylib
+*.dll
+*.exe
+
+
+# ============================================================
+# CMake
+# ============================================================
+
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+
+# ============================================================
+# Local service files
+# ============================================================
+
+*.service.local
+*.service.override
+
+local/
+local-config/
+.local/
+
+
+# ============================================================
+# Backup / migration files
+# ============================================================
+
+backup/
+backups/
+migration-backups/
+
+*.bak
+*.backup
+
+*.dump
+*.snapshot
+
+
+# ============================================================
+# Secrets accidentally generated by tools
+# ============================================================
+
+*.pem
+*.key
+*.crt
+*.cer
+
+# NOTE:
+# If the project intentionally contains public certificates,
+# explicitly force-add them with:
+#
+# git add -f path/to/file.crt
+
+
+# ============================================================
+# SSH / deployment leftovers
+# ============================================================
+
+.ssh/
+known_hosts
+authorized_keys
+
+# Deployment configs containing local credentials
+deploy.local.*
+deployment.local.*
+
+
+# ============================================================
+# CI local state
+# ============================================================
+
+.ci/
+.github/local/
+
+# Local GitHub CLI state
+.github/.local/
+
+
+# ============================================================
+# Environment managers
+# ============================================================
+
+.direnv/
+.envrc.local
+
+# asdf local override
+.tool-versions.local
+
+# mise local override
+.mise.local.toml
+
+
+# ============================================================
+# uv
+# ============================================================
+
+# uv virtual environment
+.venv/
+
+# uv cache
+.uv/
+
+# If you intentionally commit uv.lock, DO NOT ignore it.
+# uv.lock should normally remain tracked.
+
+
+# ============================================================
+# Poetry
+# ============================================================
+
+.poetry/
+
+
+# ============================================================
+# Hatch
+# ============================================================
+
+.hatch/
+
+
+# ============================================================
+# PDM
+# ============================================================
+
+.pdm-build/
+
+
+# ============================================================
+# Local Python builds
+# ============================================================
+
+*.whl
+*.tar.gz
+
+
+# ============================================================
+# Generated reports
+# ============================================================
+
+reports/
+report/
+reports-local/
+
+*.html.generated
+*.json.generated
+*.xml.generated
+
+
+# ============================================================
+# Miscellaneous generated files
+# ============================================================
+
+*.generated
+*.generated.*
+
+*.cache
+*.cache.*
+
+*.temp
+*.temp.*
+
+# Lock files created by applications (NOT package manager locks)
+*.runtime.lock
+*.session.lock
+
+
+# ============================================================
+# Local notes
+# ============================================================
+
+NOTES.local.md
+TODO.local.md
+SCRATCH.md
+LOCAL.md
+
+# Personal agent notes
+AGENT_NOTES.md
+AGENT_NOTES.local.md
+
+
+# ============================================================
+# AI / Coding Agent artifacts
+# ============================================================
+
+.opencode/
+.opencode-local/
+.claude/
+.cursor/
+.cursorrules.local
+
+# Local AI context
+.ai/
+.ai-cache/
+.agent/
+.agent-cache/
+
+# Agent-generated temporary files
+.agent-tmp/
+agent-tmp/
+
+
+# ============================================================
+# OS / editor temporary directories
+# ============================================================
+
+.tmp/
+.temp/
+.cache/
+
+# Generic temporary directories
+temp/
+temporary/
+tmp/
+
+
+# ============================================================
+# Ignore local patches / diffs
+# ============================================================
+
+*.patch.local
+*.diff.local

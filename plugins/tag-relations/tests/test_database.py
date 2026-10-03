@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.db.database import init_db, get_schema_version
 from backend.db.repository import RelationRepository
@@ -13,7 +13,7 @@ from backend.errors import DuplicateRelationError, RelationNotFoundError
 
 @pytest.fixture
 def db_path():
-    with tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
         path = f.name
     yield path
     if os.path.exists(path):

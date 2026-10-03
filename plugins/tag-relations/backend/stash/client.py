@@ -79,8 +79,7 @@ class StashClient:
             headers["Cookie"] = self.session_cookie
 
         logger.info(
-            "GraphQL request: url=%s api_key_present=%s "
-            "session_cookie_present=%s",
+            "GraphQL request: url=%s api_key_present=%s session_cookie_present=%s",
             self.graphql_url,
             bool(self.api_key),
             bool(self.session_cookie),
@@ -95,31 +94,21 @@ class StashClient:
 
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                result = json.loads(
-                    response.read().decode("utf-8")
-                )
+                result = json.loads(response.read().decode("utf-8"))
 
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8")
 
-            raise StashAPIError(
-                f"HTTP {e.code}: {body}"
-            ) from e
+            raise StashAPIError(f"HTTP {e.code}: {body}") from e
 
         except urllib.error.URLError as e:
-            raise StashAPIError(
-                f"Connection error: {e}"
-            ) from e
+            raise StashAPIError(f"Connection error: {e}") from e
 
         except json.JSONDecodeError as e:
-            raise StashAPIError(
-                f"Invalid JSON response from Stash: {e}"
-            ) from e
+            raise StashAPIError(f"Invalid JSON response from Stash: {e}") from e
 
         if "errors" in result:
-            raise StashAPIError(
-                f"GraphQL errors: {result['errors']}"
-            )
+            raise StashAPIError(f"GraphQL errors: {result['errors']}")
 
         return result.get("data", {})
 

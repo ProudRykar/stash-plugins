@@ -1,13 +1,13 @@
 (function () {
-  'use strict';
+  "use strict";
 
-  const PLUGIN_ID = 'tag-relations';
+  const PLUGIN_ID = "tag-relations";
 
-  const INLINE_ITEM_CLASS = 'tag-relations-inline-item';
-  const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
+  const INLINE_ITEM_CLASS = "tag-relations-inline-item";
+  const EDIT_FIELDS_CLASS = "tag-relations-edit-fields";
 
-  const EDIT_HOST_MARKER = 'data-tag-relations-host';
-  const SAVE_PATCH_MARKER = 'data-tag-relations-save-patched';
+  const EDIT_HOST_MARKER = "data-tag-relations-host";
+  const SAVE_PATCH_MARKER = "data-tag-relations-save-patched";
 
   const relationCache = new Map();
   const relationRequests = new Map();
@@ -40,11 +40,11 @@
   let saveObserverTarget = null;
 
   function log() {
-    console.log('[Tag Relations]', ...arguments);
+    console.log("[Tag Relations]", ...arguments);
   }
 
   function logError() {
-    console.error('[Tag Relations]', ...arguments);
+    console.error("[Tag Relations]", ...arguments);
   }
 
   // ============================================================
@@ -56,41 +56,35 @@
 
   const MESSAGES = {
     en: {
-      relatedTags: 'Related Tags',
-      loading: 'Loading...',
-      loadingRelations: 'Loading related tags...',
-      loadRelationsError: 'Failed to load related tags: ',
-      selectorError: 'Failed to load the tag selector',
-      saveRelationsError: 'Failed to save related tags:\n\n',
+      relatedTags: "Related Tags",
+      loading: "Loading...",
+      loadingRelations: "Loading related tags...",
+      loadRelationsError: "Failed to load related tags: ",
+      selectorError: "Failed to load the tag selector",
+      saveRelationsError: "Failed to save related tags:\n\n",
     },
 
     ru: {
-      relatedTags: 'Связанные теги',
-      loading: 'Загрузка...',
-      loadingRelations: 'Загрузка связанных тегов...',
-      loadRelationsError: 'Не удалось загрузить связанные теги: ',
-      selectorError: 'Не удалось загрузить выбор тегов',
-      saveRelationsError: 'Не удалось сохранить связанные теги:\n\n',
+      relatedTags: "Связанные теги",
+      loading: "Загрузка...",
+      loadingRelations: "Загрузка связанных тегов...",
+      loadRelationsError: "Не удалось загрузить связанные теги: ",
+      selectorError: "Не удалось загрузить выбор тегов",
+      saveRelationsError: "Не удалось сохранить связанные теги:\n\n",
     },
   };
 
   function getLanguage() {
     const lang =
-      (document.documentElement &&
-        document.documentElement.lang) ||
-      '';
+      (document.documentElement && document.documentElement.lang) || "";
 
-    return lang.toLowerCase().indexOf('ru') === 0
-      ? 'ru'
-      : 'en';
+    return lang.toLowerCase().indexOf("ru") === 0 ? "ru" : "en";
   }
 
   function t(key) {
     const table = MESSAGES[getLanguage()];
 
-    return table[key] !== undefined
-      ? table[key]
-      : key;
+    return table[key] !== undefined ? table[key] : key;
   }
 
   // ============================================================
@@ -110,22 +104,18 @@
         {
           operation: operation,
         },
-        args || {}
+        args || {},
       ),
     };
 
-    log(
-      'Plugin operation:',
-      operation,
-      variables.args
-    );
+    log("Plugin operation:", operation, variables.args);
 
-    const response = await fetch('/graphql', {
-      method: 'POST',
+    const response = await fetch("/graphql", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      credentials: 'same-origin',
+      credentials: "same-origin",
       body: JSON.stringify({
         query: query,
         variables: variables,
@@ -133,12 +123,7 @@
     });
 
     if (!response.ok) {
-      throw new Error(
-        'HTTP ' +
-          response.status +
-          ': ' +
-          response.statusText
-      );
+      throw new Error("HTTP " + response.status + ": " + response.statusText);
     }
 
     const result = await response.json();
@@ -149,24 +134,17 @@
           .map(function (error) {
             return error.message;
           })
-          .join(', ')
+          .join(", "),
       );
     }
 
-    let data =
-      result.data &&
-      result.data.runPluginOperation;
+    let data = result.data && result.data.runPluginOperation;
 
-    if (
-      data === null ||
-      data === undefined
-    ) {
-      throw new Error(
-        'Plugin returned an empty response'
-      );
+    if (data === null || data === undefined) {
+      throw new Error("Plugin returned an empty response");
     }
 
-    if (typeof data === 'string') {
+    if (typeof data === "string") {
       try {
         data = JSON.parse(data);
       } catch (error) {
@@ -186,22 +164,15 @@
 
     if (
       data &&
-      typeof data === 'object' &&
-      Object.prototype.hasOwnProperty.call(
-        data,
-        'ok'
-      )
+      typeof data === "object" &&
+      Object.prototype.hasOwnProperty.call(data, "ok")
     ) {
       if (!data.ok) {
-        let message = 'Operation failed';
+        let message = "Operation failed";
 
         if (data.error) {
-          if (
-            typeof data.error === 'object'
-          ) {
-            message =
-              data.error.message ||
-              message;
+          if (typeof data.error === "object") {
+            message = data.error.message || message;
           } else {
             message = String(data.error);
           }
@@ -210,21 +181,11 @@
         throw new Error(message);
       }
 
-      if (
-        Object.prototype.hasOwnProperty.call(
-          data,
-          'output'
-        )
-      ) {
+      if (Object.prototype.hasOwnProperty.call(data, "output")) {
         return data.output;
       }
 
-      if (
-        Object.prototype.hasOwnProperty.call(
-          data,
-          'data'
-        )
-      ) {
+      if (Object.prototype.hasOwnProperty.call(data, "data")) {
         return data.data;
       }
 
@@ -241,7 +202,7 @@
   const PluginApi = window.PluginApi;
 
   if (!PluginApi) {
-    logError('PluginApi is unavailable');
+    logError("PluginApi is unavailable");
     return;
   }
 
@@ -249,9 +210,7 @@
   const ReactDOM = PluginApi.ReactDOM;
 
   if (!React || !ReactDOM) {
-    logError(
-      'React or ReactDOM is unavailable'
-    );
+    logError("React or ReactDOM is unavailable");
     return;
   }
 
@@ -272,13 +231,9 @@
       return null;
     }
 
-    const component =
-      components.TagIDSelect;
+    const component = components.TagIDSelect;
 
-    if (
-      typeof component !== 'function' &&
-      typeof component !== 'object'
-    ) {
+    if (typeof component !== "function" && typeof component !== "object") {
       return null;
     }
 
@@ -290,29 +245,21 @@
   // ============================================================
 
   function getCurrentTagId() {
-    const pathname =
-      window.location.pathname;
+    const pathname = window.location.pathname;
 
-    const match = pathname.match(
-      /^\/tags\/(\d+)(?:\/|$)/
-    );
+    const match = pathname.match(/^\/tags\/(\d+)(?:\/|$)/);
 
     if (!match) {
       return null;
     }
 
-    const id = parseInt(
-      match[1],
-      10
-    );
+    const id = parseInt(match[1], 10);
 
-    return Number.isFinite(id)
-      ? id
-      : null;
+    return Number.isFinite(id) ? id : null;
   }
 
   function getTagUrl(tagId) {
-    return '/tags/' + tagId;
+    return "/tags/" + tagId;
   }
 
   // ============================================================
@@ -323,17 +270,12 @@
     if (Array.isArray(data)) {
       return data
         .filter(function (tag) {
-          return (
-            tag &&
-            tag.id !== undefined
-          );
+          return tag && tag.id !== undefined;
         })
         .map(function (tag) {
           return {
             id: Number(tag.id),
-            name:
-              tag.name ||
-              String(tag.id),
+            name: tag.name || String(tag.id),
           };
         })
         .filter(function (tag) {
@@ -341,22 +283,13 @@
         });
     }
 
-    if (
-      !data ||
-      typeof data !== 'object'
-    ) {
+    if (!data || typeof data !== "object") {
       return [];
     }
 
-    const similar =
-      Array.isArray(data.similar)
-        ? data.similar
-        : [];
+    const similar = Array.isArray(data.similar) ? data.similar : [];
 
-    const related =
-      Array.isArray(data.related)
-        ? data.related
-        : [];
+    const related = Array.isArray(data.related) ? data.related : [];
 
     const result = [];
     const seen = new Set();
@@ -370,40 +303,30 @@
      * are therefore combined.
      */
 
-    similar
-      .concat(related)
-      .forEach(function (tag) {
-        if (
-          !tag ||
-          tag.id === undefined
-        ) {
-          return;
-        }
+    similar.concat(related).forEach(function (tag) {
+      if (!tag || tag.id === undefined) {
+        return;
+      }
 
-        const id = String(tag.id);
+      const id = String(tag.id);
 
-        if (seen.has(id)) {
-          return;
-        }
+      if (seen.has(id)) {
+        return;
+      }
 
-        seen.add(id);
+      seen.add(id);
 
-        const numericId =
-          Number(tag.id);
+      const numericId = Number(tag.id);
 
-        if (
-          !Number.isFinite(numericId)
-        ) {
-          return;
-        }
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
 
-        result.push({
-          id: numericId,
-          name:
-            tag.name ||
-            String(tag.id),
-        });
+      result.push({
+        id: numericId,
+        name: tag.name || String(tag.id),
       });
+    });
 
     return result;
   }
@@ -413,10 +336,7 @@
   // ============================================================
 
   function invalidateRelationCache(tagId) {
-    if (
-      tagId === undefined ||
-      tagId === null
-    ) {
+    if (tagId === undefined || tagId === null) {
       return;
     }
 
@@ -431,45 +351,32 @@
     const key = String(tagId);
 
     if (relationCache.has(key)) {
-      return Promise.resolve(
-        relationCache.get(key)
-      );
+      return Promise.resolve(relationCache.get(key));
     }
 
     if (relationRequests.has(key)) {
       return relationRequests.get(key);
     }
 
-    const request =
-      runPluginOperation(
-        'list_relations',
-        {
-          tag_id: Number(tagId),
-        }
-      )
-        .then(function (data) {
-          const relations =
-            normalizeRelationData(data);
+    const request = runPluginOperation("list_relations", {
+      tag_id: Number(tagId),
+    })
+      .then(function (data) {
+        const relations = normalizeRelationData(data);
 
-          relationCache.set(
-            key,
-            relations
-          );
+        relationCache.set(key, relations);
 
-          return relations;
-        })
-        .catch(function (error) {
-          relationRequests.delete(key);
-          throw error;
-        })
-        .finally(function () {
-          relationRequests.delete(key);
-        });
+        return relations;
+      })
+      .catch(function (error) {
+        relationRequests.delete(key);
+        throw error;
+      })
+      .finally(function () {
+        relationRequests.delete(key);
+      });
 
-    relationRequests.set(
-      key,
-      request
-    );
+    relationRequests.set(key, request);
 
     return request;
   }
@@ -485,26 +392,19 @@
   // ============================================================
 
   function RelatedTagsSelect(props) {
-    const tagId =
-      Number(props.tagId);
+    const tagId = Number(props.tagId);
 
     const state = useState(
-      Array.isArray(props.initialIds)
-        ? props.initialIds
-        : []
+      Array.isArray(props.initialIds) ? props.initialIds : [],
     );
 
     const selectedIds = state[0];
     const setSelectedIds = state[1];
 
-    const TagIDSelect =
-      getNativeTagIDSelect();
+    const TagIDSelect = getNativeTagIDSelect();
 
     function handleSelect(tags) {
-      const values =
-        Array.isArray(tags)
-          ? tags
-          : [];
+      const values = Array.isArray(tags) ? tags : [];
 
       const uniqueIds = [];
       const seen = new Set();
@@ -520,10 +420,6 @@
           return;
         }
 
-        /*
-         * Prevent self-relation.
-         */
-
         if (id === tagId) {
           return;
         }
@@ -538,15 +434,9 @@
 
       setSelectedIds(uniqueIds);
 
-      const previous =
-        editStates.get(
-          String(tagId)
-        );
+      const previous = editStates.get(String(tagId));
 
-      editStates.set(
-        String(tagId),
-        uniqueIds
-      );
+      editStates.set(String(tagId), uniqueIds);
 
       /*
        * The related tags field is not part of Formik,
@@ -556,38 +446,25 @@
 
       if (
         !Array.isArray(previous) ||
-        previous.join(',') !==
-          uniqueIds.join(',')
+        previous.join(",") !== uniqueIds.join(",")
       ) {
-        pendingRelationEdits.add(
-          String(tagId)
-        );
-
-        /*
-         * Enable Save right away instead of waiting
-         * for the tag page poll.
-         */
-
+        pendingRelationEdits.add(String(tagId));
         armSaveButton(tagId);
       }
 
-      log(
-        'Related tags changed:',
-        {
-          tagId: tagId,
-          ids: uniqueIds,
-        }
-      );
+      log("Related tags changed:", {
+        tagId: tagId,
+        ids: uniqueIds,
+      });
     }
 
     if (!TagIDSelect) {
       return createElement(
-        'div',
+        "div",
         {
-          className:
-            'tag-relations-native-select-error text-danger',
+          className: "tag-relations-native-select-error text-danger",
         },
-        t('selectorError')
+        t("selectorError"),
       );
     }
 
@@ -601,26 +478,20 @@
      * React portal, that Apollo context is preserved.
      */
 
-    return createElement(
-      TagIDSelect,
-      {
-        /*
-         * Stash defaults isMulti to false, which
-         * renders a single-value container. Related
-         * tags must render as multi-value chips.
-         */
-        isMulti: true,
+    return createElement(TagIDSelect, {
+      /*
+       * Stash defaults isMulti to false, which
+       * renders a single-value container. Related
+       * tags must render as multi-value chips.
+       */
+      isMulti: true,
 
-        ids: selectedIds.map(
-          function (id) {
-            return String(id);
-          }
-        ),
+      ids: selectedIds.map(function (id) {
+        return String(id);
+      }),
 
-        onSelect:
-          handleSelect,
-      }
-    );
+      onSelect: handleSelect,
+    });
   }
 
   // ============================================================
@@ -630,32 +501,23 @@
   function RelationEditFields(props) {
     const tagId = props.tagId;
 
-    const relationsState =
-      useState(null);
+    const relationsState = useState(null);
 
-    const relations =
-      relationsState[0];
+    const relations = relationsState[0];
 
-    const setRelations =
-      relationsState[1];
+    const setRelations = relationsState[1];
 
-    const loadingState =
-      useState(true);
+    const loadingState = useState(true);
 
-    const loading =
-      loadingState[0];
+    const loading = loadingState[0];
 
-    const setLoading =
-      loadingState[1];
+    const setLoading = loadingState[1];
 
-    const errorState =
-      useState(null);
+    const errorState = useState(null);
 
-    const error =
-      errorState[0];
+    const error = errorState[0];
 
-    const setError =
-      errorState[1];
+    const setError = errorState[1];
 
     useEffect(
       function () {
@@ -666,10 +528,7 @@
          * preserve local state.
          */
 
-        const existing =
-          editStates.get(
-            String(tagId)
-          );
+        const existing = editStates.get(String(tagId));
 
         /*
          * null:
@@ -680,12 +539,9 @@
          */
 
         if (Array.isArray(existing)) {
-          const ids =
-            existing.map(
-              function (id) {
-                return Number(id);
-              }
-            );
+          const ids = existing.map(function (id) {
+            return Number(id);
+          });
 
           setRelations(ids);
           setLoading(false);
@@ -704,29 +560,20 @@
               return;
             }
 
-            const ids =
-              tags.map(
-                function (tag) {
-                  return Number(tag.id);
-                }
-              );
+            const ids = tags.map(function (tag) {
+              return Number(tag.id);
+            });
 
             setRelations(ids);
 
-            editStates.set(
-              String(tagId),
-              ids
-            );
+            editStates.set(String(tagId), ids);
           })
           .catch(function (loadError) {
             if (cancelled) {
               return;
             }
 
-            logError(
-              'Failed to load relations:',
-              loadError
-            );
+            logError("Failed to load relations:", loadError);
 
             setError(loadError);
             setRelations([]);
@@ -741,63 +588,54 @@
           cancelled = true;
         };
       },
-      [tagId]
+      [tagId],
     );
 
     if (loading) {
       return createElement(
-        'div',
+        "div",
         {
-          className:
-            'tag-relations-edit-loading',
+          className: "tag-relations-edit-loading",
         },
-        t('loadingRelations')
+        t("loadingRelations"),
       );
     }
 
     if (error) {
       return createElement(
-        'div',
+        "div",
         {
-          className:
-            'tag-relations-edit-error text-danger',
+          className: "tag-relations-edit-error text-danger",
         },
-        t('loadRelationsError') + error.message
+        t("loadRelationsError") + error.message,
       );
     }
 
     return createElement(
-      'div',
+      "div",
       {
-        className:
-          'form-group row tag-relations-form-group',
+        className: "form-group row tag-relations-form-group",
       },
 
       createElement(
-        'label',
+        "label",
         {
-          className:
-            'form-label col-form-label col-xl-2 col-sm-3',
+          className: "form-label col-form-label col-xl-2 col-sm-3",
         },
-        t('relatedTags')
+        t("relatedTags"),
       ),
 
       createElement(
-        'div',
+        "div",
         {
-          className:
-            'col-xl-7 col-sm-9',
+          className: "col-xl-7 col-sm-9",
         },
 
-        createElement(
-          RelatedTagsSelect,
-          {
-            tagId: tagId,
-            initialIds:
-              relations || [],
-          }
-        )
-      )
+        createElement(RelatedTagsSelect, {
+          tagId: tagId,
+          initialIds: relations || [],
+        }),
+      ),
     );
   }
 
@@ -814,20 +652,15 @@
   // ============================================================
 
   function TagRelationsEditBridge(props) {
-    const tagId =
-      Number(props.tagId);
+    const tagId = Number(props.tagId);
 
-    const enabled =
-      props.enabled === true;
+    const enabled = props.enabled === true;
 
-    const targetState =
-      useState(null);
+    const targetState = useState(null);
 
-    const target =
-      targetState[0];
+    const target = targetState[0];
 
-    const setTarget =
-      targetState[1];
+    const setTarget = targetState[1];
 
     useEffect(
       function () {
@@ -836,70 +669,37 @@
           return undefined;
         }
 
-        const form =
-          document.querySelector(
-            '#tag-page #tag-edit'
-          );
+        const form = document.querySelector("#tag-page #tag-edit");
 
         if (!form) {
           setTarget(null);
           return undefined;
         }
 
-        let container =
-          form.querySelector(
-            '.' +
-              EDIT_FIELDS_CLASS +
-              '[' +
-              EDIT_HOST_MARKER +
-              '="true"]'
-          );
+        let container = form.querySelector(
+          "." + EDIT_FIELDS_CLASS + "[" + EDIT_HOST_MARKER + '="true"]',
+        );
 
         if (!container) {
-          container =
-            document.createElement(
-              'div'
-            );
+          container = document.createElement("div");
 
-          container.className =
-            EDIT_FIELDS_CLASS;
+          container.className = EDIT_FIELDS_CLASS;
 
-          container.setAttribute(
-            EDIT_HOST_MARKER,
-            'true'
-          );
+          container.setAttribute(EDIT_HOST_MARKER, "true");
 
-          const childField =
-            form.querySelector(
-              '[data-field="child_ids"]'
-            );
+          const childField = form.querySelector('[data-field="child_ids"]');
 
           if (childField) {
-            childField.insertAdjacentElement(
-              'afterend',
-              container
-            );
+            childField.insertAdjacentElement("afterend", container);
           } else {
-            form.appendChild(
-              container
-            );
+            form.appendChild(container);
           }
 
-          log(
-            'Created related tags portal host for tag',
-            tagId
-          );
+          log("Created related tags portal host for tag", tagId);
         }
 
-        if (
-          !editStates.has(
-            String(tagId)
-          )
-        ) {
-          editStates.set(
-            String(tagId),
-            null
-          );
+        if (!editStates.has(String(tagId))) {
+          editStates.set(String(tagId), null);
         }
 
         setTarget(container);
@@ -916,13 +716,10 @@
           setTarget(null);
         };
       },
-      [enabled, tagId]
+      [enabled, tagId],
     );
 
-    if (
-      !enabled ||
-      !target
-    ) {
+    if (!enabled || !target) {
       return null;
     }
 
@@ -934,13 +731,10 @@
      */
 
     return ReactDOM.createPortal(
-      createElement(
-        RelationEditFields,
-        {
-          tagId: tagId,
-        }
-      ),
-      target
+      createElement(RelationEditFields, {
+        tagId: tagId,
+      }),
+      target,
     );
   }
 
@@ -955,12 +749,9 @@
   // ============================================================
 
   function splitPatchArgs(args) {
-    const componentProps =
-      args.length ? args[0] : null;
+    const componentProps = args.length ? args[0] : null;
 
-    let rendered = args.length
-      ? args[args.length - 1]
-      : null;
+    let rendered = args.length ? args[args.length - 1] : null;
 
     if (!React.isValidElement(rendered)) {
       for (let i = args.length - 1; i >= 0; i--) {
@@ -984,33 +775,19 @@
       const value = args[i];
 
       if (React.isValidElement(value)) {
-        parts.push('#' + i + ':<element>');
+        parts.push("#" + i + ":<element>");
       } else if (value === null) {
-        parts.push('#' + i + ':null');
+        parts.push("#" + i + ":null");
       } else if (value === undefined) {
-        parts.push('#' + i + ':undefined');
-      } else if (typeof value === 'object') {
-        parts.push(
-          '#' +
-            i +
-            ':object{' +
-            Object.keys(value).join(',') +
-            '}'
-        );
+        parts.push("#" + i + ":undefined");
+      } else if (typeof value === "object") {
+        parts.push("#" + i + ":object{" + Object.keys(value).join(",") + "}");
       } else {
-        parts.push(
-          '#' + i + ':' + typeof value
-        );
+        parts.push("#" + i + ":" + typeof value);
       }
     }
 
-    logError(
-      label +
-        ' after-args(' +
-        args.length +
-        '): ' +
-        parts.join(' | ')
-    );
+    logError(label + " after-args(" + args.length + "): " + parts.join(" | "));
   }
 
   // ============================================================
@@ -1020,146 +797,92 @@
   // We append our bridge to that same tree.
   // ============================================================
 
-  if (
-    PluginApi.patch &&
-    typeof PluginApi.patch.after ===
-      'function'
-  ) {
-    PluginApi.patch.after(
-      'ImageInput',
-      function () {
-        const args =
-          Array.prototype.slice.call(
-            arguments
-          );
+  if (PluginApi.patch && typeof PluginApi.patch.after === "function") {
+    PluginApi.patch.after("ImageInput", function () {
+      const args = Array.prototype.slice.call(arguments);
 
-        const split =
-          splitPatchArgs(args);
+      const split = splitPatchArgs(args);
 
-        const componentProps =
-          split.componentProps;
-        const rendered = split.rendered;
+      const componentProps = split.componentProps;
+      const rendered = split.rendered;
 
-        if (!rendered) {
-          logPatchArgs(
-            'ImageInput patch:',
-            args
-          );
-          return null;
-        }
-
-        const tagId = getCurrentTagId();
-
-        const enabled = !!(
-          tagId &&
-          componentProps &&
-          componentProps.isEditing === true
-        );
-
-        if (!enabled) {
-          return rendered;
-        }
-
-        log(
-          'Injecting related tags bridge into Tag edit tree:',
-          tagId
-        );
-
-        return createElement(
-          Fragment,
-          null,
-          rendered,
-          createElement(
-            TagRelationsEditBridge,
-            {
-              key:
-                'tag-relations-edit-' +
-                tagId,
-              tagId: tagId,
-              enabled: true,
-            }
-          )
-        );
+      if (!rendered) {
+        logPatchArgs("ImageInput patch:", args);
+        return null;
       }
-    );
 
-    log(
-      'ImageInput patch installed'
-    );
+      const tagId = getCurrentTagId();
+
+      const enabled = !!(
+        tagId &&
+        componentProps &&
+        componentProps.isEditing === true
+      );
+
+      if (!enabled) {
+        return rendered;
+      }
+
+      log("Injecting related tags bridge into Tag edit tree:", tagId);
+
+      return createElement(
+        Fragment,
+        null,
+        rendered,
+        createElement(TagRelationsEditBridge, {
+          key: "tag-relations-edit-" + tagId,
+          tagId: tagId,
+          enabled: true,
+        }),
+      );
+    });
+
+    log("ImageInput patch installed");
   } else {
-    logError(
-      'PluginApi.patch.after is unavailable'
-    );
+    logError("PluginApi.patch.after is unavailable");
   }
 
   // ============================================================
   // TagPage patch - for read-only view
   // ============================================================
 
-  if (
-    PluginApi.patch &&
-    typeof PluginApi.patch.after ===
-      'function'
-  ) {
-    PluginApi.patch.after(
-      'TagPage',
-      function () {
-        const args =
-          Array.prototype.slice.call(
-            arguments
-          );
+  if (PluginApi.patch && typeof PluginApi.patch.after === "function") {
+    PluginApi.patch.after("TagPage", function () {
+      const args = Array.prototype.slice.call(arguments);
 
-        const split =
-          splitPatchArgs(args);
+      const split = splitPatchArgs(args);
 
-        const componentProps =
-          split.componentProps;
-        const rendered = split.rendered;
+      const componentProps = split.componentProps;
+      const rendered = split.rendered;
 
-        if (!rendered) {
-          logPatchArgs(
-            'TagPage patch:',
-            args
-          );
-          return null;
-        }
-
-        const tag =
-          componentProps &&
-          componentProps.tag;
-        const tagId = tag && tag.id;
-
-        if (!tagId) {
-          return rendered;
-        }
-
-        log(
-          'TagPage patch: injecting RelatedTagsInline for tag',
-          tagId
-        );
-
-        return createElement(
-          Fragment,
-          null,
-          rendered,
-          createElement(
-            RelatedTagsInline,
-            {
-              key: 'tag-relations-inline-' + tagId,
-              tagId: String(tagId),
-            }
-          )
-        );
+      if (!rendered) {
+        logPatchArgs("TagPage patch:", args);
+        return null;
       }
-    );
 
-    log(
-      'TagPage patch installed'
-    );
+      const tag = componentProps && componentProps.tag;
+      const tagId = tag && tag.id;
+
+      if (!tagId) {
+        return rendered;
+      }
+
+      log("TagPage patch: injecting RelatedTagsInline for tag", tagId);
+
+      return createElement(
+        Fragment,
+        null,
+        rendered,
+        createElement(RelatedTagsInline, {
+          key: "tag-relations-inline-" + tagId,
+          tagId: String(tagId),
+        }),
+      );
+    });
+
+    log("TagPage patch installed");
   } else {
-    logError(
-      'PluginApi.patch.after is unavailable for TagPage'
-    );
+    logError("PluginApi.patch.after is unavailable for TagPage");
   }
 
   // ============================================================
@@ -1170,26 +893,19 @@
   // ============================================================
 
   function RelatedTagsInline(props) {
-    const tagId =
-      props.tagId;
+    const tagId = props.tagId;
 
-    const state =
-      useState(null);
+    const state = useState(null);
 
-    const relations =
-      state[0];
+    const relations = state[0];
 
-    const setRelations =
-      state[1];
+    const setRelations = state[1];
 
-    const errorState =
-      useState(null);
+    const errorState = useState(null);
 
-    const error =
-      errorState[0];
+    const error = errorState[0];
 
-    const setError =
-      errorState[1];
+    const setError = errorState[1];
 
     useEffect(
       function () {
@@ -1203,10 +919,7 @@
           })
           .catch(function (loadError) {
             if (!cancelled) {
-              logError(
-                'Failed to load inline relations:',
-                loadError
-              );
+              logError("Failed to load inline relations:", loadError);
 
               setError(loadError);
             }
@@ -1216,7 +929,7 @@
           cancelled = true;
         };
       },
-      [tagId]
+      [tagId],
     );
 
     if (error) {
@@ -1225,12 +938,11 @@
 
     if (relations === null) {
       return createElement(
-        'span',
+        "span",
         {
-          className:
-            'tag-relations-inline-loading',
+          className: "tag-relations-inline-loading",
         },
-        t('loading')
+        t("loading"),
       );
     }
 
@@ -1242,36 +954,27 @@
       Fragment,
       null,
 
-      relations.map(
-        function (tag) {
-          return createElement(
-            'span',
+      relations.map(function (tag) {
+        return createElement(
+          "span",
+          {
+            key: tag.id,
+
+            "data-sort-name": tag.name,
+
+            className: "tag-item tag-link badge badge-secondary",
+          },
+
+          createElement(
+            "a",
             {
-              key: tag.id,
-
-              'data-sort-name':
-                tag.name,
-
-              className:
-                'tag-item tag-link badge badge-secondary',
+              href: getTagUrl(tag.id),
             },
 
-            createElement(
-              'a',
-              {
-                href:
-                  getTagUrl(tag.id),
-              },
-
-              createElement(
-                'div',
-                null,
-                tag.name
-              )
-            )
-          );
-        }
-      )
+            createElement("div", null, tag.name),
+          ),
+        );
+      }),
     );
   }
 
@@ -1282,61 +985,36 @@
   // Never use this for TagIDSelect.
   // ============================================================
 
-  function mountReact(
-    container,
-    element
-  ) {
+  function mountReact(container, element) {
     if (!container) {
-      throw new Error(
-        'React mount container is missing'
-      );
+      throw new Error("React mount container is missing");
     }
 
-    if (
-      container.__tagRelationsRoot
-    ) {
-      container.__tagRelationsRoot.render(
-        element
-      );
+    if (container.__tagRelationsRoot) {
+      container.__tagRelationsRoot.render(element);
 
       return container.__tagRelationsRoot;
     }
 
-    if (
-      typeof ReactDOM.createRoot ===
-      'function'
-    ) {
-      const root =
-        ReactDOM.createRoot(
-          container
-        );
+    if (typeof ReactDOM.createRoot === "function") {
+      const root = ReactDOM.createRoot(container);
 
       root.render(element);
 
-      container.__tagRelationsRoot =
-        root;
+      container.__tagRelationsRoot = root;
 
       return root;
     }
 
-    if (
-      typeof ReactDOM.render ===
-      'function'
-    ) {
-      ReactDOM.render(
-        element,
-        container
-      );
+    if (typeof ReactDOM.render === "function") {
+      ReactDOM.render(element, container);
 
-      container.__tagRelationsLegacy =
-        true;
+      container.__tagRelationsLegacy = true;
 
       return null;
     }
 
-    throw new Error(
-      'ReactDOM.createRoot/render is unavailable'
-    );
+    throw new Error("ReactDOM.createRoot/render is unavailable");
   }
 
   function unmountReact(container) {
@@ -1344,40 +1022,27 @@
       return;
     }
 
-    if (
-      container.__tagRelationsRoot
-    ) {
+    if (container.__tagRelationsRoot) {
       try {
         container.__tagRelationsRoot.unmount();
       } catch (error) {
-        logError(
-          'Failed to unmount React root:',
-          error
-        );
+        logError("Failed to unmount React root:", error);
       }
 
-      container.__tagRelationsRoot =
-        null;
+      container.__tagRelationsRoot = null;
     }
 
     if (
       container.__tagRelationsLegacy &&
-      typeof ReactDOM.unmountComponentAtNode ===
-        'function'
+      typeof ReactDOM.unmountComponentAtNode === "function"
     ) {
       try {
-        ReactDOM.unmountComponentAtNode(
-          container
-        );
+        ReactDOM.unmountComponentAtNode(container);
       } catch (error) {
-        logError(
-          'Failed to unmount legacy React:',
-          error
-        );
+        logError("Failed to unmount legacy React:", error);
       }
 
-      container.__tagRelationsLegacy =
-        false;
+      container.__tagRelationsLegacy = false;
     }
   }
 
@@ -1390,9 +1055,7 @@
       return;
     }
 
-    const mount = item.querySelector(
-      '.tag-relations-inline-mount'
-    );
+    const mount = item.querySelector(".tag-relations-inline-mount");
 
     if (mount) {
       unmountReact(mount);
@@ -1402,26 +1065,22 @@
   }
 
   function createInlineItem(detailGroup, tagId) {
-    const item = document.createElement('div');
+    const item = document.createElement("div");
 
-    item.className =
-      'detail-item ' + INLINE_ITEM_CLASS;
+    item.className = "detail-item " + INLINE_ITEM_CLASS;
 
-    item.setAttribute(
-      'data-tag-id',
-      String(tagId)
-    );
+    item.setAttribute("data-tag-id", String(tagId));
 
-    const title = document.createElement('span');
-    title.className = 'detail-item-title';
-    title.textContent = t('relatedTags') + ':';
+    const title = document.createElement("span");
+    title.className = "detail-item-title";
+    title.textContent = t("relatedTags") + ":";
 
-    const value = document.createElement('span');
-    value.className = 'detail-item-value';
+    const value = document.createElement("span");
+    value.className = "detail-item-value";
 
-    const mount = document.createElement('span');
-    mount.className = 'tag-relations-inline-mount';
-    mount.setAttribute('data-tag-id', String(tagId));
+    const mount = document.createElement("span");
+    mount.className = "tag-relations-inline-mount";
+    mount.setAttribute("data-tag-id", String(tagId));
 
     value.appendChild(mount);
     item.appendChild(title);
@@ -1431,18 +1090,14 @@
      * Put after Sub Tags.
      */
 
-    const subTags = detailGroup.querySelector(
-      '.detail-item.sub_tags'
-    );
+    const subTags = detailGroup.querySelector(".detail-item.sub_tags");
 
-    const parentTags = detailGroup.querySelector(
-      '.detail-item.parent_tags'
-    );
+    const parentTags = detailGroup.querySelector(".detail-item.parent_tags");
 
     if (subTags) {
-      subTags.insertAdjacentElement('afterend', item);
+      subTags.insertAdjacentElement("afterend", item);
     } else if (parentTags) {
-      parentTags.insertAdjacentElement('afterend', item);
+      parentTags.insertAdjacentElement("afterend", item);
     } else {
       detailGroup.appendChild(item);
     }
@@ -1452,10 +1107,10 @@
         mount,
         createElement(RelatedTagsInline, {
           tagId: String(tagId),
-        })
+        }),
       );
     } catch (error) {
-      logError('Failed to mount inline relations:', error);
+      logError("Failed to mount inline relations:", error);
       item.remove();
     }
   }
@@ -1466,9 +1121,7 @@
    * "Related Tags:" heading.
    */
   function installInlineRelations(tagId) {
-    const detailGroup = document.querySelector(
-      '#tag-page .detail-group'
-    );
+    const detailGroup = document.querySelector("#tag-page .detail-group");
 
     if (!detailGroup) {
       return;
@@ -1476,20 +1129,13 @@
 
     const key = String(tagId);
 
-    let item = detailGroup.querySelector(
-      '.' + INLINE_ITEM_CLASS
-    );
+    let item = detailGroup.querySelector("." + INLINE_ITEM_CLASS);
 
     if (item) {
-      if (item.getAttribute('data-tag-id') !== key) {
+      if (item.getAttribute("data-tag-id") !== key) {
         removeInlineItem(item);
         item = null;
       } else if (relationCache.has(key)) {
-        /*
-         * Cached data is authoritative. Remove the row
-         * once the last relation goes away.
-         */
-
         if (relationCache.get(key).length === 0) {
           removeInlineItem(item);
           item = null;
@@ -1518,11 +1164,11 @@
 
     const state = inlineInstallState.get(key);
 
-    if (state === 'loading' || state === 'failed') {
+    if (state === "loading" || state === "failed") {
       return;
     }
 
-    inlineInstallState.set(key, 'loading');
+    inlineInstallState.set(key, "loading");
 
     getRelations(tagId)
       .then(function (relations) {
@@ -1532,17 +1178,13 @@
           return;
         }
 
-        const group = document.querySelector(
-          '#tag-page .detail-group'
-        );
+        const group = document.querySelector("#tag-page .detail-group");
 
         if (!group) {
           return;
         }
 
-        if (
-          group.querySelector('.' + INLINE_ITEM_CLASS)
-        ) {
+        if (group.querySelector("." + INLINE_ITEM_CLASS)) {
           return;
         }
 
@@ -1551,9 +1193,9 @@
         }
       })
       .catch(function (error) {
-        logError('Failed to load inline relations:', error);
+        logError("Failed to load inline relations:", error);
 
-        inlineInstallState.set(key, 'failed');
+        inlineInstallState.set(key, "failed");
 
         setTimeout(function () {
           inlineInstallState.delete(key);
@@ -1579,9 +1221,7 @@
     const keys = Object.keys(node);
 
     for (let i = 0; i < keys.length; i++) {
-      if (
-        keys[i].indexOf('__reactProps') === 0
-      ) {
+      if (keys[i].indexOf("__reactProps") === 0) {
         return node[keys[i]];
       }
     }
@@ -1596,17 +1236,13 @@
    */
 
   function ensureSaveObserver() {
-    const tagPage =
-      document.querySelector('#tag-page');
+    const tagPage = document.querySelector("#tag-page");
 
     if (!tagPage) {
       return;
     }
 
-    if (
-      saveObserver &&
-      saveObserverTarget === tagPage
-    ) {
+    if (saveObserver && saveObserverTarget === tagPage) {
       return;
     }
 
@@ -1616,21 +1252,17 @@
 
     saveObserverTarget = tagPage;
 
-    saveObserver =
-      new MutationObserver(function () {
-        const id = getCurrentTagId();
+    saveObserver = new MutationObserver(function () {
+      const id = getCurrentTagId();
 
-        if (
-          id !== null &&
-          pendingRelationEdits.has(String(id))
-        ) {
-          enableSaveButton(id);
-        }
-      });
+      if (id !== null && pendingRelationEdits.has(String(id))) {
+        enableSaveButton(id);
+      }
+    });
 
     saveObserver.observe(tagPage, {
       attributes: true,
-      attributeFilter: ['disabled'],
+      attributeFilter: ["disabled"],
       childList: true,
       subtree: true,
     });
@@ -1662,56 +1294,37 @@
    */
 
   function enableSaveButton(tagId) {
-    if (
-      !pendingRelationEdits.has(
-        String(tagId)
-      )
-    ) {
+    if (!pendingRelationEdits.has(String(tagId))) {
       return false;
     }
 
     ensureSaveObserver();
 
-    const controls =
-      document.querySelector(
-        '#tag-page .details-edit'
-      );
+    const controls = document.querySelector("#tag-page .details-edit");
 
     if (!controls) {
       return false;
     }
 
-    const saveButton =
-      controls.querySelector(
-        'button.save'
-      );
+    const saveButton = controls.querySelector("button.save");
 
     if (!saveButton) {
       return false;
     }
 
-    const props =
-      getReactProps(saveButton);
+    const props = getReactProps(saveButton);
 
     if (props && props.disabled) {
       props.disabled = false;
 
-      log(
-        'Cleared React disabled prop so Save click reaches Stash:',
-        tagId
-      );
+      log("Cleared React disabled prop so Save click reaches Stash:", tagId);
     }
 
     if (saveButton.disabled) {
       saveButton.disabled = false;
-      saveButton.removeAttribute(
-        'disabled'
-      );
+      saveButton.removeAttribute("disabled");
 
-      log(
-        'Enabled Save for pending related tag changes:',
-        tagId
-      );
+      log("Enabled Save for pending related tag changes:", tagId);
     }
 
     return true;
@@ -1726,43 +1339,28 @@
    */
 
   function armSaveButton(tagId) {
-    [
-      0, 150, 400, 800, 1600,
-    ].forEach(function (delay) {
+    [0, 150, 400, 800, 1600].forEach(function (delay) {
       if (delay === 0) {
         enableSaveButton(tagId);
         return;
       }
 
       setTimeout(function () {
-        if (
-          pendingRelationEdits.has(
-            String(tagId)
-          )
-        ) {
+        if (pendingRelationEdits.has(String(tagId))) {
           enableSaveButton(tagId);
         }
       }, delay);
     });
   }
 
-  function patchSaveButton(
-    tagId,
-    form
-  ) {
-    const controls =
-      document.querySelector(
-        '#tag-page .details-edit'
-      );
+  function patchSaveButton(tagId, form) {
+    const controls = document.querySelector("#tag-page .details-edit");
 
     if (!controls) {
       return;
     }
 
-    const saveButton =
-      controls.querySelector(
-        'button.save'
-      );
+    const saveButton = controls.querySelector("button.save");
 
     if (!saveButton) {
       return;
@@ -1777,18 +1375,11 @@
 
     enableSaveButton(tagId);
 
-    if (
-      saveButton.hasAttribute(
-        SAVE_PATCH_MARKER
-      )
-    ) {
+    if (saveButton.hasAttribute(SAVE_PATCH_MARKER)) {
       return;
     }
 
-    saveButton.setAttribute(
-      SAVE_PATCH_MARKER,
-      'true'
-    );
+    saveButton.setAttribute(SAVE_PATCH_MARKER, "true");
 
     /*
      * Capture phase.
@@ -1798,13 +1389,11 @@
      */
 
     saveButton.addEventListener(
-      'click',
+      "click",
       function () {
-        const key =
-          String(tagId);
+        const key = String(tagId);
 
-        const state =
-          editStates.get(key);
+        const state = editStates.get(key);
 
         /*
          * Never overwrite relations if the
@@ -1812,55 +1401,33 @@
          */
 
         if (!Array.isArray(state)) {
-          log(
-            'Save clicked before relations finished loading'
-          );
+          log("Save clicked before relations finished loading");
 
           return;
         }
 
-        const relationIds =
-          state
-            .map(function (id) {
-              return Number(id);
-            })
-            .filter(function (id) {
-              return (
-                Number.isFinite(id) &&
-                id !== Number(tagId)
-              );
-            });
+        const relationIds = state
+          .map(function (id) {
+            return Number(id);
+          })
+          .filter(function (id) {
+            return Number.isFinite(id) && id !== Number(tagId);
+          });
 
-        log(
-          'Native Save clicked; captured related tags:',
-          relationIds
-        );
+        log("Native Save clicked; captured related tags:", relationIds);
 
-        waitForNativeSave(
-          tagId,
-          form,
-          relationIds
-        );
+        waitForNativeSave(tagId, form, relationIds);
       },
-      true
+      true,
     );
 
-    log(
-      'Native save button patched for tag',
-      tagId
-    );
+    log("Native save button patched for tag", tagId);
   }
 
-  function waitForNativeSave(
-    tagId,
-    form,
-    relationIds
-  ) {
-    const started =
-      Date.now();
+  function waitForNativeSave(tagId, form, relationIds) {
+    const started = Date.now();
 
-    const timeout =
-      15000;
+    const timeout = 15000;
 
     const warned = {
       value: false,
@@ -1869,9 +1436,7 @@
     function check() {
       const stillInDOM =
         form.isConnected &&
-        document.querySelector(
-          '#tag-page #tag-edit'
-        ) === form;
+        document.querySelector("#tag-page #tag-edit") === form;
 
       /*
        * Successful Stash save normally destroys
@@ -1879,16 +1444,12 @@
        */
 
       if (!stillInDOM) {
-        syncRelationsAfterNativeSave(
-          tagId,
-          relationIds
-        );
+        syncRelationsAfterNativeSave(tagId, relationIds);
 
         return;
       }
 
-      const elapsed =
-        Date.now() - started;
+      const elapsed = Date.now() - started;
 
       /*
        * A normal Stash save completes well within
@@ -1897,54 +1458,37 @@
        * and the tag view page will not open.
        */
 
-      if (
-        !warned.value &&
-        elapsed >= 3000
-      ) {
+      if (!warned.value && elapsed >= 3000) {
         warned.value = true;
 
         log(
-          'Native save has not run after 3s; ' +
-            'Stash form validation likely blocked it'
+          "Native save has not run after 3s; " +
+            "Stash form validation likely blocked it",
         );
       }
 
       if (elapsed >= timeout) {
         log(
-          'Native save did not finish within timeout; ' +
-            'relations were not synchronized'
+          "Native save did not finish within timeout; " +
+            "relations were not synchronized",
         );
 
         return;
       }
 
-      setTimeout(
-        check,
-        100
-      );
+      setTimeout(check, 100);
     }
 
-    setTimeout(
-      check,
-      100
-    );
+    setTimeout(check, 100);
   }
 
-  async function syncRelationsAfterNativeSave(
-    tagId,
-    relationIds
-  ) {
+  async function syncRelationsAfterNativeSave(tagId, relationIds) {
     try {
-      log(
-        'Synchronizing related tags:',
-        {
-          tagId:
-            Number(tagId),
+      log("Synchronizing related tags:", {
+        tagId: Number(tagId),
 
-          related:
-            relationIds,
-        }
-      );
+        related: relationIds,
+      });
 
       /*
        * UI has only one relation type:
@@ -1957,44 +1501,25 @@
        * Existing "similar" relations are cleared.
        */
 
-      await runPluginOperation(
-        'set_relations',
-        {
-          tag_id:
-            Number(tagId),
+      await runPluginOperation("set_relations", {
+        tag_id: Number(tagId),
 
-          similar_ids:
-            [],
+        similar_ids: [],
 
-          related_ids:
-            relationIds,
-        }
-      );
+        related_ids: relationIds,
+      });
 
-      invalidateRelationCache(
-        tagId
-      );
+      invalidateRelationCache(tagId);
 
-      editStates.delete(
-        String(tagId)
-      );
+      editStates.delete(String(tagId));
 
-      pendingRelationEdits.delete(
-        String(tagId)
-      );
+      pendingRelationEdits.delete(String(tagId));
 
-      log(
-        'Related tags saved successfully'
-      );
+      log("Related tags saved successfully");
     } catch (error) {
-      logError(
-        'Failed to save related tags:',
-        error
-      );
+      logError("Failed to save related tags:", error);
 
-      window.alert(
-        t('saveRelationsError') + error.message
-      );
+      window.alert(t("saveRelationsError") + error.message);
     }
   }
 
@@ -2010,15 +1535,9 @@
      */
 
     document
-      .querySelectorAll(
-        '.' +
-          INLINE_ITEM_CLASS
-      )
+      .querySelectorAll("." + INLINE_ITEM_CLASS)
       .forEach(function (element) {
-        const mount =
-          element.querySelector(
-            '.tag-relations-inline-mount'
-          );
+        const mount = element.querySelector(".tag-relations-inline-mount");
 
         if (mount) {
           unmountReact(mount);
@@ -2040,16 +1559,10 @@
 
     document
       .querySelectorAll(
-        '.' +
-          EDIT_FIELDS_CLASS +
-          '[' +
-          EDIT_HOST_MARKER +
-          '="true"]'
+        "." + EDIT_FIELDS_CLASS + "[" + EDIT_HOST_MARKER + '="true"]',
       )
       .forEach(function (element) {
-        if (
-          element.isConnected
-        ) {
+        if (element.isConnected) {
           element.remove();
         }
       });
@@ -2066,32 +1579,20 @@
    * away) discards anything the user did not save.
    */
   function dropPendingEditState(tagId) {
-    if (
-      tagId === null ||
-      tagId === undefined
-    ) {
+    if (tagId === null || tagId === undefined) {
       return;
     }
 
     editStates.delete(String(tagId));
 
-    pendingRelationEdits.delete(
-      String(tagId)
-    );
+    pendingRelationEdits.delete(String(tagId));
   }
 
   function scanTagPage() {
-    const tagId =
-      getCurrentTagId();
-
-    /*
-     * Not on a tag page.
-     */
+    const tagId = getCurrentTagId();
 
     if (!tagId) {
-      if (
-        currentTagId !== null
-      ) {
+      if (currentTagId !== null) {
         dropPendingEditState(currentTagId);
         cleanupPluginUI();
         currentTagId = null;
@@ -2100,33 +1601,20 @@
       return;
     }
 
-    /*
-     * Different tag.
-     */
-
-    if (
-      currentTagId !== null &&
-      currentTagId !== tagId
-    ) {
+    if (currentTagId !== null && currentTagId !== tagId) {
       dropPendingEditState(currentTagId);
       cleanupPluginUI();
     }
 
     currentTagId = tagId;
 
-    const tagPage =
-      document.querySelector(
-        '#tag-page'
-      );
+    const tagPage = document.querySelector("#tag-page");
 
     if (!tagPage) {
       return;
     }
 
-    const editForm =
-      document.querySelector(
-        '#tag-page #tag-edit'
-      );
+    const editForm = document.querySelector("#tag-page #tag-edit");
 
     /*
      * IMPORTANT:
@@ -2138,24 +1626,14 @@
      */
 
     if (editForm) {
-      patchSaveButton(
-        tagId,
-        editForm
-      );
+      patchSaveButton(tagId, editForm);
 
       return;
     }
 
-    /*
-     * Normal view: edit mode was left (cancel, saved,
-     * or the form was torn down).
-     */
-
     dropPendingEditState(tagId);
 
-    installInlineRelations(
-      tagId
-    );
+    installInlineRelations(tagId);
   }
 
   // ============================================================
@@ -2163,37 +1641,25 @@
   // ============================================================
 
   function installRouteListener() {
-    if (
-      routeListenerInstalled
-    ) {
+    if (routeListenerInstalled) {
       return;
     }
 
     if (
       PluginApi.Event &&
-      typeof PluginApi.Event.addEventListener ===
-        'function'
+      typeof PluginApi.Event.addEventListener === "function"
     ) {
-      PluginApi.Event.addEventListener(
-        'stash:location',
-        function () {
-          /*
-           * Allow Stash to finish rendering.
-           */
+      PluginApi.Event.addEventListener("stash:location", function () {
+        /*
+         * Allow Stash to finish rendering.
+         */
 
-          setTimeout(
-            scanTagPage,
-            0
-          );
-        }
-      );
+        setTimeout(scanTagPage, 0);
+      });
 
-      routeListenerInstalled =
-        true;
+      routeListenerInstalled = true;
 
-      log(
-        'Stash route listener installed'
-      );
+      log("Stash route listener installed");
     }
   }
 
@@ -2203,25 +1669,16 @@
 
   function startEditModePolling() {
     if (editScanTimer) {
-      clearInterval(
-        editScanTimer
-      );
+      clearInterval(editScanTimer);
     }
 
-    editScanTimer =
-      setInterval(
-        function () {
-          try {
-            scanTagPage();
-          } catch (error) {
-            logError(
-              'Tag page scan failed:',
-              error
-            );
-          }
-        },
-        500
-      );
+    editScanTimer = setInterval(function () {
+      try {
+        scanTagPage();
+      } catch (error) {
+        logError("Tag page scan failed:", error);
+      }
+    }, 500);
   }
 
   // ============================================================
@@ -2234,7 +1691,5 @@
 
   scanTagPage();
 
-  log(
-    'loaded'
-  );
+  log("loaded");
 })();

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
 
 
 class RelationType(StrEnum):
@@ -17,11 +16,11 @@ class TagRelation:
     def __post_init__(self):
         if self.tag_a_id >= self.tag_b_id:
             raise ValueError("tag_a_id must be less than tag_b_id")
-        if self.tag_a_id == self.tag_b_id:
-            raise ValueError("tag_a_id cannot equal tag_b_id")
 
     @classmethod
-    def create(cls, tag_a_id: int, tag_b_id: int, relation_type: RelationType) -> "TagRelation":
+    def create(
+        cls, tag_a_id: int, tag_b_id: int, relation_type: RelationType
+    ) -> "TagRelation":
         if tag_a_id > tag_b_id:
             tag_a_id, tag_b_id = tag_b_id, tag_a_id
         return cls(tag_a_id=tag_a_id, tag_b_id=tag_b_id, relation_type=relation_type)

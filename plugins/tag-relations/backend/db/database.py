@@ -69,7 +69,9 @@ def init_db(db_path: str) -> None:
         table_exists = cursor.fetchone() is not None
 
         if table_exists:
-            cursor.execute("SELECT value FROM plugin_metadata WHERE key = 'schema_version'")
+            cursor.execute(
+                "SELECT value FROM plugin_metadata WHERE key = 'schema_version'"
+            )
             row = cursor.fetchone()
             current_version = int(row["value"]) if row else 0
         else:

@@ -1,6 +1,12 @@
 import logging
-from typing import Optional
-from backend.models import TagRelation, RelationType, RelationsResult, Tag, ValidationResult, ExportData
+from backend.models import (
+    TagRelation,
+    RelationType,
+    RelationsResult,
+    Tag,
+    ValidationResult,
+    ExportData,
+)
 from backend.db.repository import RelationRepository
 from backend.stash.client import StashClient
 from backend.errors import (
@@ -90,20 +96,32 @@ class RelationService:
     ) -> None:
         relation = TagRelation.create(tag_a_id, tag_b_id, relation_type)
         try:
-            self.repository.delete(relation.tag_a_id, relation.tag_b_id, relation.relation_type)
+            self.repository.delete(
+                relation.tag_a_id, relation.tag_b_id, relation.relation_type
+            )
         except RelationNotFoundError:
             raise
         except Exception as e:
             logger.error(f"Failed to delete relation: {e}")
             raise
 
-    def set_relations(self, tag_id: int, similar_ids: list[int], related_ids: list[int]) -> RelationsResult:
+    def set_relations(
+        self, tag_id: int, similar_ids: list[int], related_ids: list[int]
+    ) -> RelationsResult:
         for tid in similar_ids + related_ids:
             self._validate_tags(tag_id, tid)
 
         current = self.repository.list_for_tag(tag_id)
-        current_similar = {r.other_tag(tag_id) for r in current if r.relation_type == RelationType.SIMILAR}
-        current_related = {r.other_tag(tag_id) for r in current if r.relation_type == RelationType.RELATED}
+        current_similar = {
+            r.other_tag(tag_id)
+            for r in current
+            if r.relation_type == RelationType.SIMILAR
+        }
+        current_related = {
+            r.other_tag(tag_id)
+            for r in current
+            if r.relation_type == RelationType.RELATED
+        }
 
         new_similar = set(similar_ids)
         new_related = set(related_ids)
@@ -114,9 +132,13 @@ class RelationService:
         to_remove_related = current_related - new_related
 
         for other_id in to_add_similar:
-            self.repository.create(TagRelation.create(tag_id, other_id, RelationType.SIMILAR))
+            self.repository.create(
+                TagRelation.create(tag_id, other_id, RelationType.SIMILAR)
+            )
         for other_id in to_add_related:
-            self.repository.create(TagRelation.create(tag_id, other_id, RelationType.RELATED))
+            self.repository.create(
+                TagRelation.create(tag_id, other_id, RelationType.RELATED)
+            )
         for other_id in to_remove_similar:
             self.repository.delete(*sorted([tag_id, other_id]), RelationType.SIMILAR)
         for other_id in to_remove_related:
@@ -135,7 +157,11 @@ class RelationService:
             all_tag_ids.add(r.tag_b_id)
 
         existing_ids = self.stash.validate_tags_exist(list(all_tag_ids))
-        broken = [r for r in all_relations if not (r.tag_a_id in existing_ids and r.tag_b_id in existing_ids)]
+        broken = [
+            r
+            for r in all_relations
+            if not (r.tag_a_id in existing_ids and r.tag_b_id in existing_ids)
+        ]
         valid = len(all_relations) - len(broken)
 
         return ValidationResult(valid_count=valid, broken_relations=broken)
