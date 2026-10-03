@@ -27,9 +27,11 @@ query Tag($id: ID!) {
 
 TAGS_BY_IDS_QUERY = """
 query Tags($ids: [ID!]!) {
-    tags(ids: $ids) {
-        id
-        name
+    findTags(ids: $ids) {
+        tags {
+            id
+            name
+        }
     }
 }
 """
@@ -86,10 +88,19 @@ class StashClient:
     def get_tags(self, ids: list[int]) -> list[Tag]:
         if not ids:
             return []
-        data = self._request(TAGS_BY_IDS_QUERY, {"ids": [str(i) for i in ids]})
-        tags_data = data.get("tags", [])
-        return [Tag(id=int(t["id"]), name=t["name"]) for t in tags_data]
 
+        data = self._request(
+            TAGS_BY_IDS_QUERY,
+            {"ids": [str(i) for i in ids]},
+        )
+
+        tags_data = data.get("findTags", {}).get("tags", [])
+
+        return [
+            Tag(id=int(t["id"]), name=t["name"])
+            for t in tags_data
+        ]
+    
     def validate_tags_exist(self, tag_ids: list[int]) -> set[int]:
         if not tag_ids:
             return set()
