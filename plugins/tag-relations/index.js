@@ -3,6 +3,10 @@
 
   const PLUGIN_ID = 'tag-relations';
 
+  const INLINE_MOUNT_CLASS = 'tag-relations-inline-mount';
+  const MANAGER_MOUNT_CLASS = 'tag-relations-manager-mount';
+  const RELATIONS_BUTTON_CLASS = 'tag-relations-native-button';
+
   function log() {
     console.log('[Tag Relations]', ...arguments);
   }
@@ -34,6 +38,8 @@
       )
     };
 
+    log('Plugin operation:', operation, variables.args);
+
     try {
       const response = await fetch('/graphql', {
         method: 'POST',
@@ -58,6 +64,8 @@
 
       const result = await response.json();
 
+      log('GraphQL response:', operation, result);
+
       if (result.errors) {
         throw new Error(
           result.errors
@@ -68,16 +76,54 @@
         );
       }
 
-      const data = result.data.runPluginOperation;
+      const rawData =
+        result.data &&
+        result.data.runPluginOperation;
 
-      if (!data.ok) {
+      if (!rawData) {
         throw new Error(
-          (data.error && data.error.message) ||
-            'Operation failed'
+          'Plugin returned an empty response'
         );
       }
 
-      return data.data;
+      /*
+       * Depending on Stash/plugin implementation,
+       * the operation result can already be an object
+       * or can occasionally arrive serialized.
+       */
+      let data = rawData;
+
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (error) {
+          /*
+           * Leave it as-is if it isn't JSON.
+           */
+        }
+      }
+
+      if (
+        data &&
+        typeof data === 'object' &&
+        Object.prototype.hasOwnProperty.call(
+          data,
+          'ok'
+        )
+      ) {
+        if (!data.ok) {
+          throw new Error(
+            (data.error &&
+              data.error.message) ||
+              data.error ||
+              'Operation failed'
+          );
+        }
+
+        return data.data;
+      }
+
+      return data;
     } catch (error) {
       logError(
         'Plugin operation failed:',
@@ -95,16 +141,27 @@
    * ============================================================
    */
 
-  const React = window.PluginApi.React;
-  const ReactDOM = window.PluginApi.ReactDOM;
+  const PluginApi = window.PluginApi;
+
+  if (!PluginApi) {
+    logError('PluginApi is unavailable');
+    return;
+  }
+
+  const React = PluginApi.React;
+  const ReactDOM = PluginApi.ReactDOM;
 
   if (!React) {
-    logError('PluginApi.React is unavailable');
+    logError(
+      'PluginApi.React is unavailable'
+    );
     return;
   }
 
   if (!ReactDOM) {
-    logError('PluginApi.ReactDOM is unavailable');
+    logError(
+      'PluginApi.ReactDOM is unavailable'
+    );
     return;
   }
 
@@ -112,7 +169,127 @@
   const useState = React.useState;
   const useEffect = React.useEffect;
   const useRef = React.useRef;
-  const Fragment = React.Fragment;
+
+  /*
+   * ============================================================
+   * React mounting helpers
+   * ============================================================
+   */
+
+  function mountReact(
+    container,
+    element
+  ) {
+    if (
+      ReactDOM &&
+      typeof ReactDOM.createRoot ===
+        'function'
+    ) {
+      const root =
+        ReactDOM.createRoot(container);
+
+      root.render(element);
+
+      container.__tagRelationsRoot =
+        root;
+
+      return root;
+    }
+
+    if (
+      ReactDOM &&
+      typeof ReactDOM.render ===
+        'function'
+    ) {
+      ReactDOM.render(
+        element,
+        container
+      );
+
+      container.__tagRelationsLegacy =
+        true;
+
+      return null;
+    }
+
+    throw new Error(
+      'ReactDOM.createRoot/render is unavailable'
+    );
+  }
+
+  function unmountReact(
+    container
+  ) {
+    if (!container) {
+      return;
+    }
+
+    if (
+      container.__tagRelationsRoot
+    ) {
+      try {
+        container.__tagRelationsRoot.unmount();
+      } catch (error) {
+        logError(
+          'Failed to unmount React root:',
+          error
+        );
+      }
+
+      container.__tagRelationsRoot =
+        null;
+    }
+
+    if (
+      container.__tagRelationsLegacy &&
+      typeof ReactDOM.unmountComponentAtNode ===
+        'function'
+    ) {
+      try {
+        ReactDOM.unmountComponentAtNode(
+          container
+        );
+      } catch (error) {
+        logError(
+          'Failed to unmount legacy React:',
+          error
+        );
+      }
+
+      container.__tagRelationsLegacy =
+        false;
+    }
+  }
+
+  /*
+   * ============================================================
+   * Tag helpers
+   * ============================================================
+   */
+
+  function getCurrentTagId() {
+    const match =
+      window.location.pathname.match(
+        /^\/tags\/([^/]+)/
+      );
+
+    if (!match) {
+      return null;
+    }
+
+    const id = parseInt(
+      match[1],
+      10
+    );
+
+    return Number.isFinite(id)
+      ? id
+      : null;
+  }
+
+  function getTagUrl(tagId) {
+    return '/tags/' + tagId;
+  }
 
   /*
    * ============================================================
@@ -120,54 +297,76 @@
    * ============================================================
    */
 
-  function RelationRow(_ref) {
-    const tag = _ref.tag;
-    const relationType = _ref.relationType;
-    const sourceTagId = _ref.sourceTagId;
-    const onDelete = _ref.onDelete;
+  function RelationRow(props) {
+    const tag = props.tag;
+    const relationType =
+      props.relationType;
+    const sourceTagId =
+      props.sourceTagId;
+    const onDelete =
+      props.onDelete;
 
-    const handleDelete = function () {
-      if (
-        !window.confirm(
-          'Remove ' +
-            relationType +
-            ' relation to "' +
-            tag.name +
-            '"?'
+    const handleDelete =
+      function () {
+        if (
+          !window.confirm(
+            'Remove ' +
+              relationType +
+              ' relation to "' +
+              tag.name +
+              '"?'
+          )
+        ) {
+          return;
+        }
+
+        log(
+          'Deleting relation:',
+          sourceTagId,
+          tag.id,
+          relationType
+        );
+
+        runPluginOperation(
+          'delete_relation',
+          {
+            tag_a_id: sourceTagId,
+            tag_b_id: tag.id,
+            relation_type:
+              relationType
+          }
         )
-      ) {
-        return;
-      }
+          .then(function () {
+            log(
+              'Relation deleted successfully'
+            );
 
-      runPluginOperation('delete_relation', {
-        tag_a_id: sourceTagId,
-        tag_b_id: tag.id,
-        relation_type: relationType
-      })
-        .then(function () {
-          onDelete();
-        })
-        .catch(function (error) {
-          logError(
-            'Failed to delete relation:',
-            error
-          );
+            onDelete();
+          })
+          .catch(function (error) {
+            logError(
+              'Failed to delete relation:',
+              error
+            );
 
-          window.alert(
-            'Failed to delete relation'
-          );
-        });
-    };
+            window.alert(
+              'Failed to delete relation:\n' +
+                error.message
+            );
+          });
+      };
 
     return createElement(
       'div',
       {
-        className: 'tag-relations-relation-row'
+        className:
+          'tag-relations-relation-row'
       },
 
       createElement(
-        'span',
+        'a',
         {
+          href: getTagUrl(tag.id),
           className:
             'tag-relations-relation-tag-name'
         },
@@ -191,7 +390,8 @@
           className:
             'tag-relations-relation-delete-btn',
           onClick: handleDelete,
-          title: 'Remove relation'
+          title:
+            'Remove relation'
         },
         '×'
       )
@@ -204,45 +404,92 @@
    * ============================================================
    */
 
-  function AddRelationModal(_ref) {
-    const sourceTagId = _ref.sourceTagId;
-    const relationType = _ref.relationType;
-    const onClose = _ref.onClose;
-    const onAdd = _ref.onAdd;
+  function AddRelationModal(props) {
+    const sourceTagId =
+      props.sourceTagId;
 
-    const _useState = useState('');
-    const search = _useState[0];
-    const setSearch = _useState[1];
+    const relationType =
+      props.relationType;
 
-    const _useState2 = useState([]);
-    const results = _useState2[0];
-    const setResults = _useState2[1];
+    const onClose =
+      props.onClose;
 
-    const _useState3 = useState(false);
-    const loading = _useState3[0];
-    const setLoading = _useState3[1];
+    const onAdd =
+      props.onAdd;
 
-    const _useState4 = useState(0);
-    const selectedIndex = _useState4[0];
-    const setSelectedIndex = _useState4[1];
+    const searchState =
+      useState('');
 
-    const inputRef = useRef(null);
+    const search =
+      searchState[0];
 
-    useEffect(function () {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, []);
+    const setSearch =
+      searchState[1];
+
+    const resultsState =
+      useState([]);
+
+    const results =
+      resultsState[0];
+
+    const setResults =
+      resultsState[1];
+
+    const loadingState =
+      useState(false);
+
+    const loading =
+      loadingState[0];
+
+    const setLoading =
+      loadingState[1];
+
+    const selectedState =
+      useState(0);
+
+    const selectedIndex =
+      selectedState[0];
+
+    const setSelectedIndex =
+      selectedState[1];
+
+    const addingState =
+      useState(false);
+
+    const adding =
+      addingState[0];
+
+    const setAdding =
+      addingState[1];
+
+    const inputRef =
+      useRef(null);
 
     useEffect(
       function () {
-        const timeout = setTimeout(function () {
-          if (search.trim().length >= 2) {
-            doSearch();
-          } else {
-            setResults([]);
-          }
-        }, 300);
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      },
+      []
+    );
+
+    useEffect(
+      function () {
+        const timeout =
+          setTimeout(
+            function () {
+              if (
+                search.trim().length >=
+                2
+              ) {
+                doSearch();
+              } else {
+                setResults([]);
+              }
+            },
+            300
+          );
 
         return function () {
           clearTimeout(timeout);
@@ -251,84 +498,170 @@
       [search]
     );
 
-    const doSearch = function () {
-      setLoading(true);
+    const doSearch =
+      function () {
+        const query =
+          search.trim();
 
-      runPluginOperation('find_tags', {
-        search: search.trim(),
-        per_page: 20
-      })
-        .then(function (data) {
-          const filtered = data.filter(
-            function (tag) {
-              return tag.id !== sourceTagId;
+        if (query.length < 2) {
+          return;
+        }
+
+        setLoading(true);
+
+        log(
+          'Searching tags:',
+          query
+        );
+
+        runPluginOperation(
+          'find_tags',
+          {
+            search: query,
+            per_page: 20
+          }
+        )
+          .then(function (data) {
+            const tags =
+              Array.isArray(data)
+                ? data
+                : [];
+
+            const filtered =
+              tags.filter(
+                function (tag) {
+                  return (
+                    String(tag.id) !==
+                    String(sourceTagId)
+                  );
+                }
+              );
+
+            log(
+              'Tag search results:',
+              filtered
+            );
+
+            setResults(filtered);
+            setSelectedIndex(0);
+          })
+          .catch(function (error) {
+            logError(
+              'Search failed:',
+              error
+            );
+
+            setResults([]);
+          })
+          .finally(function () {
+            setLoading(false);
+          });
+      };
+
+    const handleAdd =
+      function (tagId) {
+        if (adding) {
+          return;
+        }
+
+        setAdding(true);
+
+        log(
+          'Adding relation:',
+          {
+            sourceTagId:
+              sourceTagId,
+            targetTagId:
+              tagId,
+            relationType:
+              relationType
+          }
+        );
+
+        Promise.resolve(
+          onAdd(
+            tagId,
+            relationType
+          )
+        ).finally(
+          function () {
+            setAdding(false);
+          }
+        );
+      };
+
+    const handleKeyDown =
+      function (event) {
+        if (
+          event.key ===
+          'Escape'
+        ) {
+          onClose();
+          return;
+        }
+
+        if (
+          event.key ===
+          'ArrowDown'
+        ) {
+          event.preventDefault();
+
+          setSelectedIndex(
+            function (prev) {
+              return Math.min(
+                prev + 1,
+                Math.max(
+                  results.length - 1,
+                  0
+                )
+              );
             }
           );
 
-          setResults(filtered);
-          setSelectedIndex(0);
-        })
-        .catch(function (error) {
-          logError(
-            'Search failed:',
-            error
-          );
-        })
-        .finally(function () {
-          setLoading(false);
-        });
-    };
-
-    const handleKeyDown = function (e) {
-      if (e.key === 'Escape') {
-        onClose();
-        return;
-      }
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-
-        setSelectedIndex(function (prev) {
-          return Math.min(
-            prev + 1,
-            Math.max(
-              results.length - 1,
-              0
-            )
-          );
-        });
-
-        return;
-      }
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-
-        setSelectedIndex(function (prev) {
-          return Math.max(
-            prev - 1,
-            0
-          );
-        });
-
-        return;
-      }
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-
-        if (results[selectedIndex]) {
-          onAdd(
-            results[selectedIndex].id,
-            relationType
-          );
+          return;
         }
-      }
-    };
+
+        if (
+          event.key ===
+          'ArrowUp'
+        ) {
+          event.preventDefault();
+
+          setSelectedIndex(
+            function (prev) {
+              return Math.max(
+                prev - 1,
+                0
+              );
+            }
+          );
+
+          return;
+        }
+
+        if (
+          event.key ===
+          'Enter'
+        ) {
+          event.preventDefault();
+
+          if (
+            results[selectedIndex]
+          ) {
+            handleAdd(
+              results[
+                selectedIndex
+              ].id
+            );
+          }
+        }
+      };
 
     const title =
-      relationType.charAt(0).toUpperCase() +
-      relationType.slice(1);
+      relationType ===
+      'similar'
+        ? 'Similar'
+        : 'Related';
 
     return createElement(
       'div',
@@ -343,9 +676,10 @@
         {
           className:
             'tag-relations-modal',
-          onClick: function (e) {
-            e.stopPropagation();
-          }
+          onClick:
+            function (event) {
+              event.stopPropagation();
+            }
         },
 
         createElement(
@@ -358,7 +692,9 @@
           createElement(
             'h3',
             null,
-            'Add ' + title + ' Tag'
+            'Add ' +
+              title +
+              ' Tag'
           ),
 
           createElement(
@@ -366,8 +702,9 @@
             {
               type: 'button',
               className:
-                'tag-relations-modal-close',
-              onClick: onClose
+                'btn btn-secondary',
+              onClick: onClose,
+              disabled: adding
             },
             '×'
           )
@@ -385,14 +722,23 @@
             type: 'text',
             value: search,
 
-            onChange: function (e) {
-              setSearch(e.target.value);
-            },
+            onChange:
+              function (event) {
+                setSearch(
+                  event.target.value
+                );
+              },
 
-            onKeyDown: handleKeyDown,
-            placeholder: 'Search tags...',
+            onKeyDown:
+              handleKeyDown,
+
+            placeholder:
+              'Search tags...',
+
             className:
-              'tag-relations-modal-search'
+              'tag-relations-modal-search',
+
+            disabled: adding
           }),
 
           loading &&
@@ -412,38 +758,46 @@
                 'tag-relations-modal-results'
             },
 
-            results.map(function (
-              tag,
-              index
-            ) {
-              return createElement(
-                'li',
-                {
-                  key: tag.id,
+            results.map(
+              function (
+                tag,
+                index
+              ) {
+                return createElement(
+                  'li',
+                  {
+                    key: tag.id,
 
-                  className:
-                    'tag-relations-modal-result' +
-                    (index === selectedIndex
-                      ? ' selected'
-                      : ''),
+                    className:
+                      'tag-relations-modal-result' +
+                      (index ===
+                      selectedIndex
+                        ? ' selected'
+                        : ''),
 
-                  onClick: function () {
-                    onAdd(
-                      tag.id,
-                      relationType
-                    );
+                    onClick:
+                      function () {
+                        handleAdd(
+                          tag.id
+                        );
+                      },
+
+                    onMouseEnter:
+                      function () {
+                        setSelectedIndex(
+                          index
+                        );
+                      }
                   },
 
-                  onMouseEnter: function () {
-                    setSelectedIndex(index);
-                  }
-                },
-                tag.name
-              );
-            }),
+                  tag.name
+                );
+              }
+            ),
 
             results.length === 0 &&
-              search.trim().length >= 2 &&
+              search.trim()
+                .length >= 2 &&
               !loading &&
               createElement(
                 'li',
@@ -469,9 +823,12 @@
               type: 'button',
               className:
                 'btn btn-secondary',
-              onClick: onClose
+              onClick: onClose,
+              disabled: adding
             },
-            'Cancel'
+            adding
+              ? 'Adding...'
+              : 'Cancel'
           )
         )
       )
@@ -480,71 +837,367 @@
 
   /*
    * ============================================================
-   * Related tags panel
+   * Relations data helpers
    * ============================================================
    */
 
-  function RelatedTagsPanel(_ref) {
-    const tagId = _ref.tagId;
+  function normalizeRelationData(
+    data
+  ) {
+    if (!data) {
+      return {
+        similar: [],
+        related: []
+      };
+    }
 
-    const _useState5 = useState([]);
-    const similar = _useState5[0];
-    const setSimilar = _useState5[1];
+    return {
+      similar:
+        Array.isArray(
+          data.similar
+        )
+          ? data.similar
+          : [],
 
-    const _useState6 = useState([]);
-    const related = _useState6[0];
-    const setRelated = _useState6[1];
-
-    const _useState7 = useState(false);
-    const loading = _useState7[0];
-    const setLoading = _useState7[1];
-
-    const _useState8 = useState(false);
-    const showAddModal = _useState8[0];
-    const setShowAddModal =
-      _useState8[1];
-
-    const _useState9 = useState('similar');
-    const modalType = _useState9[0];
-    const setModalType =
-      _useState9[1];
-
-    const numericTagId = tagId
-      ? parseInt(tagId, 10)
-      : null;
-
-    const loadRelations = function () {
-      if (!numericTagId) {
-        return;
-      }
-
-      setLoading(true);
-
-      runPluginOperation(
-        'list_relations',
-        {
-          tag_id: numericTagId
-        }
-      )
-        .then(function (data) {
-          setSimilar(
-            data.similar || []
-          );
-
-          setRelated(
-            data.related || []
-          );
-        })
-        .catch(function (error) {
-          logError(
-            'Failed to load relations:',
-            error
-          );
-        })
-        .finally(function () {
-          setLoading(false);
-        });
+      related:
+        Array.isArray(
+          data.related
+        )
+          ? data.related
+          : []
     };
+  }
+
+  /*
+   * ============================================================
+   * Inline related tags
+   *
+   * This is shown next to Parent Tags / Sub-Tags.
+   * ============================================================
+   */
+
+  function RelatedTagsInline(
+    props
+  ) {
+    const tagId =
+      props.tagId;
+
+    const similarState =
+      useState([]);
+
+    const similar =
+      similarState[0];
+
+    const setSimilar =
+      similarState[1];
+
+    const relatedState =
+      useState([]);
+
+    const related =
+      relatedState[0];
+
+    const setRelated =
+      relatedState[1];
+
+    const loadingState =
+      useState(true);
+
+    const loading =
+      loadingState[0];
+
+    const setLoading =
+      loadingState[1];
+
+    const loadRelations =
+      function () {
+        if (!tagId) {
+          return;
+        }
+
+        setLoading(true);
+
+        runPluginOperation(
+          'list_relations',
+          {
+            tag_id: tagId
+          }
+        )
+          .then(function (data) {
+            const normalized =
+              normalizeRelationData(
+                data
+              );
+
+            setSimilar(
+              normalized.similar
+            );
+
+            setRelated(
+              normalized.related
+            );
+          })
+          .catch(function (error) {
+            logError(
+              'Failed to load inline relations:',
+              error
+            );
+
+            setSimilar([]);
+            setRelated([]);
+          })
+          .finally(function () {
+            setLoading(false);
+          });
+      };
+
+    useEffect(
+      function () {
+        loadRelations();
+      },
+      [tagId]
+    );
+
+    if (loading) {
+      return createElement(
+        'span',
+        {
+          className:
+            'tag-relations-inline-status'
+        },
+        'Загрузка...'
+      );
+    }
+
+    const renderTag =
+      function (
+        tag,
+        relationType
+      ) {
+        return createElement(
+          'span',
+          {
+            key:
+              relationType +
+              '-' +
+              tag.id,
+
+            className:
+              'tag-item tag-link badge badge-secondary tag-relations-inline-tag ' +
+              relationType
+          },
+
+          createElement(
+            'a',
+            {
+              href:
+                getTagUrl(
+                  tag.id
+                )
+            },
+
+            createElement(
+              'div',
+              null,
+              tag.name
+            )
+          )
+        );
+      };
+
+    const hasSimilar =
+      similar.length > 0;
+
+    const hasRelated =
+      related.length > 0;
+
+    if (
+      !hasSimilar &&
+      !hasRelated
+    ) {
+      return createElement(
+        'span',
+        {
+          className:
+            'tag-relations-inline-empty'
+        },
+        'Нет связанных тегов'
+      );
+    }
+
+    return createElement(
+      'div',
+      {
+        className:
+          'tag-relations-inline-content'
+      },
+
+      hasSimilar &&
+        createElement(
+          'div',
+          {
+            className:
+              'tag-relations-inline-group'
+          },
+
+          createElement(
+            'span',
+            {
+              className:
+                'tag-relations-inline-label'
+            },
+            'Похожие:'
+          ),
+
+          similar.map(
+            function (tag) {
+              return renderTag(
+                tag,
+                'similar'
+              );
+            }
+          )
+        ),
+
+      hasRelated &&
+        createElement(
+          'div',
+          {
+            className:
+              'tag-relations-inline-group'
+          },
+
+          createElement(
+            'span',
+            {
+              className:
+                'tag-relations-inline-label'
+            },
+            'Связанные:'
+          ),
+
+          related.map(
+            function (tag) {
+              return renderTag(
+                tag,
+                'related'
+              );
+            }
+          )
+        )
+    );
+  }
+
+  /*
+   * ============================================================
+   * Management panel
+   * ============================================================
+   */
+
+  function RelatedTagsPanel(
+    props
+  ) {
+    const tagId =
+      props.tagId;
+
+    const numericTagId =
+      tagId
+        ? parseInt(tagId, 10)
+        : null;
+
+    const similarState =
+      useState([]);
+
+    const similar =
+      similarState[0];
+
+    const setSimilar =
+      similarState[1];
+
+    const relatedState =
+      useState([]);
+
+    const related =
+      relatedState[0];
+
+    const setRelated =
+      relatedState[1];
+
+    const loadingState =
+      useState(false);
+
+    const loading =
+      loadingState[0];
+
+    const setLoading =
+      loadingState[1];
+
+    const showModalState =
+      useState(false);
+
+    const showAddModal =
+      showModalState[0];
+
+    const setShowAddModal =
+      showModalState[1];
+
+    const modalTypeState =
+      useState('similar');
+
+    const modalType =
+      modalTypeState[0];
+
+    const setModalType =
+      modalTypeState[1];
+
+    const loadRelations =
+      function () {
+        if (!numericTagId) {
+          return Promise.resolve();
+        }
+
+        setLoading(true);
+
+        return runPluginOperation(
+          'list_relations',
+          {
+            tag_id:
+              numericTagId
+          }
+        )
+          .then(function (data) {
+            const normalized =
+              normalizeRelationData(
+                data
+              );
+
+            log(
+              'Loaded relations:',
+              normalized
+            );
+
+            setSimilar(
+              normalized.similar
+            );
+
+            setRelated(
+              normalized.related
+            );
+
+            return normalized;
+          })
+          .catch(function (error) {
+            logError(
+              'Failed to load relations:',
+              error
+            );
+
+            throw error;
+          })
+          .finally(function () {
+            setLoading(false);
+          });
+      };
 
     useEffect(
       function () {
@@ -561,30 +1214,71 @@
         type
       ) {
         if (!numericTagId) {
-          return;
+          return Promise.reject(
+            new Error(
+              'Invalid source tag ID'
+            )
+          );
         }
 
-        runPluginOperation(
+        log(
+          'CREATE RELATION',
+          {
+            tag_a_id:
+              numericTagId,
+
+            tag_b_id:
+              targetTagId,
+
+            relation_type:
+              type
+          }
+        );
+
+        return runPluginOperation(
           'create_relation',
           {
-            tag_a_id: numericTagId,
-            tag_b_id: targetTagId,
-            relation_type: type
+            tag_a_id:
+              numericTagId,
+
+            tag_b_id:
+              targetTagId,
+
+            relation_type:
+              type
           }
         )
+          .then(function (result) {
+            log(
+              'CREATE RELATION SUCCESS:',
+              result
+            );
+
+            return loadRelations();
+          })
           .then(function () {
-            loadRelations();
-            setShowAddModal(false);
+            setShowAddModal(
+              false
+            );
+
+            /*
+             * Also refresh the inline
+             * block immediately.
+             */
+            refreshInlineRelations();
           })
           .catch(function (error) {
             logError(
-              'Failed to add relation:',
+              'CREATE RELATION FAILED:',
               error
             );
 
             window.alert(
-              'Failed to add relation'
+              'Failed to add relation:\n\n' +
+                error.message
             );
+
+            throw error;
           });
       };
 
@@ -593,29 +1287,42 @@
         deletedTagId,
         type
       ) {
-        if (type === 'similar') {
-          setSimilar(function (prev) {
-            return prev.filter(
-              function (tag) {
-                return (
-                  tag.id !==
-                  deletedTagId
-                );
-              }
-            );
-          });
+        if (
+          type ===
+          'similar'
+        ) {
+          setSimilar(
+            function (previous) {
+              return previous.filter(
+                function (tag) {
+                  return (
+                    String(tag.id) !==
+                    String(
+                      deletedTagId
+                    )
+                  );
+                }
+              );
+            }
+          );
         } else {
-          setRelated(function (prev) {
-            return prev.filter(
-              function (tag) {
-                return (
-                  tag.id !==
-                  deletedTagId
-                );
-              }
-            );
-          });
+          setRelated(
+            function (previous) {
+              return previous.filter(
+                function (tag) {
+                  return (
+                    String(tag.id) !==
+                    String(
+                      deletedTagId
+                    )
+                  );
+                }
+              );
+            }
+          );
         }
+
+        refreshInlineRelations();
       };
 
     if (!numericTagId) {
@@ -670,11 +1377,17 @@
             {
               type: 'button',
               className:
-                'tag-relations-add-button',
-              onClick: function () {
-                setModalType('similar');
-                setShowAddModal(true);
-              }
+                'btn btn-secondary',
+              onClick:
+                function () {
+                  setModalType(
+                    'similar'
+                  );
+
+                  setShowAddModal(
+                    true
+                  );
+                }
             },
             '+ Add'
           )
@@ -705,25 +1418,33 @@
                   'tag-relations-list'
               },
 
-              similar.map(function (tag) {
-                return createElement(
-                  RelationRow,
-                  {
-                    key: tag.id,
-                    tag: tag,
-                    relationType: 'similar',
-                    sourceTagId:
-                      numericTagId,
-
-                    onDelete: function () {
-                      handleDelete(
+              similar.map(
+                function (tag) {
+                  return createElement(
+                    RelationRow,
+                    {
+                      key:
                         tag.id,
-                        'similar'
-                      );
+
+                      tag: tag,
+
+                      relationType:
+                        'similar',
+
+                      sourceTagId:
+                        numericTagId,
+
+                      onDelete:
+                        function () {
+                          handleDelete(
+                            tag.id,
+                            'similar'
+                          );
+                        }
                     }
-                  }
-                );
-              })
+                  );
+                }
+              )
             )
       ),
 
@@ -759,11 +1480,17 @@
             {
               type: 'button',
               className:
-                'tag-relations-add-button',
-              onClick: function () {
-                setModalType('related');
-                setShowAddModal(true);
-              }
+                'btn btn-secondary',
+              onClick:
+                function () {
+                  setModalType(
+                    'related'
+                  );
+
+                  setShowAddModal(
+                    true
+                  );
+                }
             },
             '+ Add'
           )
@@ -794,25 +1521,33 @@
                   'tag-relations-list'
               },
 
-              related.map(function (tag) {
-                return createElement(
-                  RelationRow,
-                  {
-                    key: tag.id,
-                    tag: tag,
-                    relationType: 'related',
-                    sourceTagId:
-                      numericTagId,
-
-                    onDelete: function () {
-                      handleDelete(
+              related.map(
+                function (tag) {
+                  return createElement(
+                    RelationRow,
+                    {
+                      key:
                         tag.id,
-                        'related'
-                      );
+
+                      tag: tag,
+
+                      relationType:
+                        'related',
+
+                      sourceTagId:
+                        numericTagId,
+
+                      onDelete:
+                        function () {
+                          handleDelete(
+                            tag.id,
+                            'related'
+                          );
+                        }
                     }
-                  }
-                );
-              })
+                  );
+                }
+              )
             )
       ),
 
@@ -826,9 +1561,12 @@
             relationType:
               modalType,
 
-            onClose: function () {
-              setShowAddModal(false);
-            },
+            onClose:
+              function () {
+                setShowAddModal(
+                  false
+                );
+              },
 
             onAdd:
               handleAddRelation
@@ -839,147 +1577,269 @@
 
   /*
    * ============================================================
+   * Inline refresh
+   *
+   * Re-mount the inline component after
+   * a relation is created/deleted.
+   * ============================================================
+   */
+
+  function refreshInlineRelations() {
+    const mount =
+      document.querySelector(
+        '.' +
+          INLINE_MOUNT_CLASS
+      );
+
+    if (!mount) {
+      return;
+    }
+
+    const tagId =
+      mount.getAttribute(
+        'data-tag-id'
+      );
+
+    if (!tagId) {
+      return;
+    }
+
+    unmountReact(mount);
+
+    try {
+      mountReact(
+        mount,
+        createElement(
+          RelatedTagsInline,
+          {
+            tagId:
+              String(tagId)
+          }
+        )
+      );
+    } catch (error) {
+      logError(
+        'Failed to refresh inline relations:',
+        error
+      );
+    }
+  }
+
+  /*
+   * ============================================================
    * Standalone page
    * ============================================================
    */
 
   function TagRelationsPage() {
-    const _useState10 = useState([]);
-    const relations = _useState10[0];
-    const setRelations = _useState10[1];
+    const relationsState =
+      useState([]);
 
-    const _useState11 = useState([]);
+    const relations =
+      relationsState[0];
+
+    const setRelations =
+      relationsState[1];
+
+    const filteredState =
+      useState([]);
+
     const filteredRelations =
-      _useState11[0];
+      filteredState[0];
+
     const setFilteredRelations =
-      _useState11[1];
+      filteredState[1];
 
-    const _useState12 = useState('');
-    const search = _useState12[0];
-    const setSearch = _useState12[1];
+    const searchState =
+      useState('');
 
-    const _useState13 = useState('all');
-    const filter = _useState13[0];
-    const setFilter = _useState13[1];
+    const search =
+      searchState[0];
 
-    const _useState14 = useState(false);
-    const loading = _useState14[0];
-    const setLoading = _useState14[1];
+    const setSearch =
+      searchState[1];
 
-    const _useState15 = useState({
-      total_relations: 0,
-      similar_count: 0,
-      related_count: 0,
-      tags_with_relations: 0
-    });
+    const filterState =
+      useState('all');
 
-    const stats = _useState15[0];
-    const setStats = _useState15[1];
+    const filter =
+      filterState[0];
 
-    const _useState16 = useState(false);
-    const showExport = _useState16[0];
-    const setShowExport = _useState16[1];
+    const setFilter =
+      filterState[1];
 
-    const _useState17 = useState('');
-    const exportData = _useState17[0];
-    const setExportData = _useState17[1];
+    const loadingState =
+      useState(false);
 
-    const applyFilters = function (rels) {
-      let filtered = rels;
+    const loading =
+      loadingState[0];
 
-      if (filter !== 'all') {
-        filtered = filtered.filter(
-          function (r) {
-            return r.type === filter;
-          }
-        );
-      }
+    const setLoading =
+      loadingState[1];
 
-      if (search.trim()) {
-        const term =
-          search.toLowerCase();
+    const statsState =
+      useState({
+        total_relations: 0,
+        similar_count: 0,
+        related_count: 0,
+        tags_with_relations: 0
+      });
 
-        filtered = filtered.filter(
-          function (r) {
-            return (
-              r.tag_a.name
-                .toLowerCase()
-                .includes(term) ||
-              r.tag_b.name
-                .toLowerCase()
-                .includes(term)
+    const stats =
+      statsState[0];
+
+    const setStats =
+      statsState[1];
+
+    const exportState =
+      useState(false);
+
+    const showExport =
+      exportState[0];
+
+    const setShowExport =
+      exportState[1];
+
+    const exportDataState =
+      useState('');
+
+    const exportData =
+      exportDataState[0];
+
+    const setExportData =
+      exportDataState[1];
+
+    const applyFilters =
+      function (rels) {
+        let filtered =
+          rels;
+
+        if (
+          filter !==
+          'all'
+        ) {
+          filtered =
+            filtered.filter(
+              function (relation) {
+                return (
+                  relation.type ===
+                  filter
+                );
+              }
             );
-          }
+        }
+
+        if (
+          search.trim()
+        ) {
+          const term =
+            search
+              .toLowerCase();
+
+          filtered =
+            filtered.filter(
+              function (relation) {
+                return (
+                  relation.tag_a.name
+                    .toLowerCase()
+                    .includes(term) ||
+                  relation.tag_b.name
+                    .toLowerCase()
+                    .includes(term)
+                );
+              }
+            );
+        }
+
+        setFilteredRelations(
+          filtered
         );
-      }
+      };
 
-      setFilteredRelations(filtered);
-    };
+    const loadAll =
+      function () {
+        setLoading(true);
 
-    const loadAll = function () {
-      setLoading(true);
+        Promise.all([
+          runPluginOperation(
+            'export_relations'
+          ),
 
-      Promise.all([
-        runPluginOperation(
-          'export_relations'
-        ),
-        runPluginOperation(
-          'get_stats'
-        )
-      ])
-        .then(function (result) {
-          const relsResult = result[0];
-          const statsResult = result[1];
+          runPluginOperation(
+            'get_stats'
+          )
+        ])
+          .then(
+            function (result) {
+              const relsResult =
+                result[0];
 
-          if (
-            relsResult &&
-            relsResult.relations
-          ) {
-            const rels =
-              relsResult.relations.map(
-                function (r) {
-                  return {
-                    tag_a: {
-                      id: r.tag_a_id,
-                      name: ''
-                    },
+              const statsResult =
+                result[1];
 
-                    tag_b: {
-                      id: r.tag_b_id,
-                      name: ''
-                    },
+              if (
+                relsResult &&
+                relsResult.relations
+              ) {
+                const rels =
+                  relsResult.relations.map(
+                    function (relation) {
+                      return {
+                        tag_a: {
+                          id:
+                            relation.tag_a_id,
+                          name: ''
+                        },
 
-                    type:
-                      r.relation_type
-                  };
-                }
-              );
+                        tag_b: {
+                          id:
+                            relation.tag_b_id,
+                          name: ''
+                        },
 
-            setRelations(rels);
-          }
+                        type:
+                          relation.relation_type
+                      };
+                    }
+                  );
 
-          if (statsResult) {
-            setStats(statsResult);
-          }
-        })
-        .catch(function (error) {
-          logError(
-            'Failed to load:',
-            error
-          );
-        })
-        .finally(function () {
-          setLoading(false);
-        });
-    };
+                setRelations(
+                  rels
+                );
+              }
 
-    useEffect(function () {
-      loadAll();
-    }, []);
+              if (
+                statsResult
+              ) {
+                setStats(
+                  statsResult
+                );
+              }
+            }
+          )
+          .catch(function (error) {
+            logError(
+              'Failed to load:',
+              error
+            );
+          })
+          .finally(function () {
+            setLoading(false);
+          });
+      };
 
     useEffect(
       function () {
-        applyFilters(relations);
+        loadAll();
+      },
+      []
+    );
+
+    useEffect(
+      function () {
+        applyFilters(
+          relations
+        );
       },
       [
         search,
@@ -988,136 +1848,155 @@
       ]
     );
 
-    const handleExport = function () {
-      runPluginOperation(
-        'export_relations'
-      )
-        .then(function (data) {
-          if (!data) {
-            return;
-          }
+    const handleExport =
+      function () {
+        runPluginOperation(
+          'export_relations'
+        )
+          .then(function (data) {
+            if (!data) {
+              return;
+            }
 
-          setExportData(
-            JSON.stringify(
-              data,
-              null,
-              2
-            )
-          );
-
-          setShowExport(true);
-        })
-        .catch(function (error) {
-          logError(
-            'Export failed:',
-            error
-          );
-        });
-    };
-
-    const handleImport = function (file) {
-      const reader = new FileReader();
-
-      reader.onload = function (e) {
-        try {
-          const data =
-            JSON.parse(
-              e.target.result
+            setExportData(
+              JSON.stringify(
+                data,
+                null,
+                2
+              )
             );
 
-          runPluginOperation(
-            'import_relations',
-            {
-              relations:
-                data.relations ||
-                [],
-              overwrite: false
-            }
-          )
-            .then(function (result) {
-              window.alert(
-                'Imported ' +
-                  result.imported_count +
-                  ' relations'
-              );
+            setShowExport(true);
+          })
+          .catch(function (error) {
+            logError(
+              'Export failed:',
+              error
+            );
+          });
+      };
 
-              loadAll();
-            })
-            .catch(function (error) {
+    const handleImport =
+      function (file) {
+        const reader =
+          new FileReader();
+
+        reader.onload =
+          function (event) {
+            try {
+              const data =
+                JSON.parse(
+                  event.target.result
+                );
+
+              runPluginOperation(
+                'import_relations',
+                {
+                  relations:
+                    data.relations ||
+                    [],
+                  overwrite:
+                    false
+                }
+              )
+                .then(function (
+                  result
+                ) {
+                  window.alert(
+                    'Imported ' +
+                      result.imported_count +
+                      ' relations'
+                  );
+
+                  loadAll();
+                })
+                .catch(function (
+                  error
+                ) {
+                  logError(
+                    'Import failed:',
+                    error
+                  );
+
+                  window.alert(
+                    'Import failed:\n' +
+                      error.message
+                  );
+                });
+            } catch (error) {
               logError(
                 'Import failed:',
                 error
               );
 
               window.alert(
-                'Import failed'
+                'Import failed:\n' +
+                  error.message
               );
-            });
-        } catch (error) {
-          logError(
-            'Import failed:',
-            error
-          );
+            }
+          };
 
-          window.alert(
-            'Import failed'
-          );
-        }
+        reader.readAsText(file);
       };
 
-      reader.readAsText(file);
-    };
-
-    const handleValidate = function () {
-      runPluginOperation(
-        'validate_relations'
-      )
-        .then(function (data) {
-          if (!data) {
-            return;
-          }
-
-          window.alert(
-            'Valid: ' +
-              data.valid_count +
-              '\nBroken: ' +
-              data.broken_count
-          );
-
-          if (data.broken_count > 0) {
-            if (
-              window.confirm(
-                'Remove broken relations?'
-              )
-            ) {
-              runPluginOperation(
-                'remove_broken_relations'
-              )
-                .then(function (result) {
-                  window.alert(
-                    'Removed ' +
-                      result.removed_count +
-                      ' broken relations'
-                  );
-
-                  loadAll();
-                })
-                .catch(function (error) {
-                  logError(
-                    'Failed to remove broken relations:',
-                    error
-                  );
-                });
+    const handleValidate =
+      function () {
+        runPluginOperation(
+          'validate_relations'
+        )
+          .then(function (data) {
+            if (!data) {
+              return;
             }
-          }
-        })
-        .catch(function (error) {
-          logError(
-            'Validate failed:',
-            error
-          );
-        });
-    };
+
+            window.alert(
+              'Valid: ' +
+                data.valid_count +
+                '\nBroken: ' +
+                data.broken_count
+            );
+
+            if (
+              data.broken_count >
+              0
+            ) {
+              if (
+                window.confirm(
+                  'Remove broken relations?'
+                )
+              ) {
+                runPluginOperation(
+                  'remove_broken_relations'
+                )
+                  .then(
+                    function (result) {
+                      window.alert(
+                        'Removed ' +
+                          result.removed_count +
+                          ' broken relations'
+                      );
+
+                      loadAll();
+                    }
+                  )
+                  .catch(
+                    function (error) {
+                      logError(
+                        'Failed to remove broken relations:',
+                        error
+                      );
+                    }
+                  );
+              }
+            }
+          })
+          .catch(function (error) {
+            logError(
+              'Validate failed:',
+              error
+            );
+          });
+      };
 
     return createElement(
       'div',
@@ -1164,15 +2043,18 @@
               type: 'file',
               accept: '.json',
 
-              onChange: function (e) {
-                const file =
-                  e.target.files &&
-                  e.target.files[0];
+              onChange:
+                function (event) {
+                  const file =
+                    event.target.files &&
+                    event.target.files[0];
 
-                if (file) {
-                  handleImport(file);
-                }
-              },
+                  if (file) {
+                    handleImport(
+                      file
+                    );
+                  }
+                },
 
               className:
                 'tag-relations-file-input',
@@ -1269,11 +2151,12 @@
             type: 'text',
             value: search,
 
-            onChange: function (e) {
-              setSearch(
-                e.target.value
-              );
-            },
+            onChange:
+              function (event) {
+                setSearch(
+                  event.target.value
+                );
+              },
 
             placeholder:
               'Search tags...',
@@ -1288,11 +2171,12 @@
           {
             value: filter,
 
-            onChange: function (e) {
-              setFilter(
-                e.target.value
-              );
-            },
+            onChange:
+              function (event) {
+                setFilter(
+                  event.target.value
+                );
+              },
 
             className:
               'tag-relations-filter-select'
@@ -1333,9 +2217,8 @@
             },
             'Loading relations...'
           )
-
-        : filteredRelations.length === 0
-
+        : filteredRelations.length ===
+          0
         ? createElement(
             'div',
             {
@@ -1344,7 +2227,6 @@
             },
             'No relations found'
           )
-
         : createElement(
             'div',
             {
@@ -1353,7 +2235,10 @@
             },
 
             filteredRelations.map(
-              function (rel, index) {
+              function (
+                relation,
+                index
+              ) {
                 return createElement(
                   'div',
                   {
@@ -1361,7 +2246,7 @@
 
                     className:
                       'tag-relations-card ' +
-                      rel.type
+                      relation.type
                   },
 
                   createElement(
@@ -1377,9 +2262,13 @@
                         className:
                           'tag-relations-tag-name'
                       },
-                      rel.tag_a.name ||
+                      relation
+                        .tag_a
+                        .name ||
                         'Tag #' +
-                          rel.tag_a.id
+                          relation
+                            .tag_a
+                            .id
                     ),
 
                     createElement(
@@ -1387,9 +2276,10 @@
                       {
                         className:
                           'tag-relations-arrow ' +
-                          rel.type
+                          relation.type
                       },
-                      rel.type === 'similar'
+                      relation.type ===
+                        'similar'
                         ? '≈'
                         : '∼'
                     ),
@@ -1400,9 +2290,13 @@
                         className:
                           'tag-relations-tag-name'
                       },
-                      rel.tag_b.name ||
+                      relation
+                        .tag_b
+                        .name ||
                         'Tag #' +
-                          rel.tag_b.id
+                          relation
+                            .tag_b
+                            .id
                     )
                   ),
 
@@ -1411,9 +2305,9 @@
                     {
                       className:
                         'tag-relations-type-badge ' +
-                        rel.type
+                        relation.type
                     },
-                    rel.type
+                    relation.type
                   )
                 );
               }
@@ -1427,9 +2321,12 @@
             className:
               'tag-relations-modal-overlay',
 
-            onClick: function () {
-              setShowExport(false);
-            }
+            onClick:
+              function () {
+                setShowExport(
+                  false
+                );
+              }
           },
 
           createElement(
@@ -1438,9 +2335,10 @@
               className:
                 'tag-relations-modal tag-relations-modal-large',
 
-              onClick: function (e) {
-                e.stopPropagation();
-              }
+              onClick:
+                function (event) {
+                  event.stopPropagation();
+                }
             },
 
             createElement(
@@ -1460,13 +2358,15 @@
                 'button',
                 {
                   type: 'button',
-
                   className:
-                    'tag-relations-modal-close',
+                    'btn btn-secondary',
 
-                  onClick: function () {
-                    setShowExport(false);
-                  }
+                  onClick:
+                    function () {
+                      setShowExport(
+                        false
+                      );
+                    }
                 },
                 '×'
               )
@@ -1484,14 +2384,16 @@
                 {
                   value:
                     exportData,
+
                   readOnly: true,
 
                   className:
                     'tag-relations-export-textarea',
 
-                  onClick: function (e) {
-                    e.target.select();
-                  }
+                  onClick:
+                    function (event) {
+                      event.target.select();
+                    }
                 }
               ),
 
@@ -1499,15 +2401,15 @@
                 'button',
                 {
                   type: 'button',
-
                   className:
                     'btn btn-primary',
 
-                  onClick: function () {
-                    navigator.clipboard.writeText(
-                      exportData
-                    );
-                  }
+                  onClick:
+                    function () {
+                      navigator.clipboard.writeText(
+                        exportData
+                      );
+                    }
                 },
                 'Copy to Clipboard'
               )
@@ -1523,7 +2425,7 @@
    * ============================================================
    */
 
-  window.PluginApi.register.route(
+  PluginApi.register.route(
     '/plugin/tag-relations',
     TagRelationsPage
   );
@@ -1537,159 +2439,282 @@
    * Tag page integration
    * ============================================================
    *
-   * We deliberately do NOT use:
+   * There are two independent integrations:
    *
-   * PluginApi.patch.after('TagPage', ...)
+   * 1. Inline relations:
    *
-   * Instead we observe the rendered DOM and add our own
-   * React mount point next to the native TagEditPanel.
+   *    Parent Tags
+   *    Child Tags
+   *    Related Tags
    *
-   * This keeps the integration independent from whether
-   * TagPage is currently exposed through PatchComponent.
+   * 2. Management button:
+   *
+   *    Tag Relations
+   *
+   * The actual React trees are mounted outside Stash's
+   * React tree wherever possible.
    */
 
   const EDIT_CONTROLS_SELECTOR =
     '#tag-page .details-edit';
 
-  const RELATIONS_BUTTON_CLASS =
-    'tag-relations-native-button';
-
-  const RELATIONS_MOUNT_CLASS =
-    'tag-relations-native-mount';
-
   let observer = null;
 
-  function getCurrentTagId() {
-    const match =
-      window.location.pathname.match(
-        /^\/tags\/([^/]+)/
-      );
+  /*
+   * ============================================================
+   * Inline relations
+   * ============================================================
+   */
 
-    if (!match) {
-      return null;
-    }
-
-    const id = parseInt(
-      match[1],
-      10
-    );
-
-    return Number.isFinite(id)
-      ? id
-      : null;
-  }
-
-  function createReactRoot(container) {
-    if (
-      ReactDOM &&
-      typeof ReactDOM.createRoot ===
-        'function'
-    ) {
-      return ReactDOM.createRoot(
-        container
-      );
-    }
-
-    return null;
-  }
-
-  function unmountRelationsMount(
-    mount
+  function installInlineRelations(
+    tagId
   ) {
-    if (!mount) {
+    if (!tagId) {
       return;
     }
 
-    if (mount.__tagRelationsRoot) {
-      try {
-        mount.__tagRelationsRoot.unmount();
-      } catch (error) {
-        logError(
-          'Failed to unmount relations root:',
-          error
-        );
-      }
+    const detailGroup =
+      document.querySelector(
+        '#tag-page .detail-group'
+      );
 
-      mount.__tagRelationsRoot = null;
+    if (!detailGroup) {
+      return;
     }
 
-    mount.remove();
-  }
-
-  function createRelationsMount(
-    controls,
-    tagId
-  ) {
+    /*
+     * Already installed.
+     */
     const existing =
-      controls.parentElement &&
-      controls.parentElement.querySelector(
+      detailGroup.querySelector(
         '.' +
-          RELATIONS_MOUNT_CLASS
+          INLINE_MOUNT_CLASS
       );
 
     if (existing) {
       return;
     }
 
+    /*
+     * Prefer inserting after child/sub-tags.
+     */
+    const subTags =
+      detailGroup.querySelector(
+        '.detail-item.sub_tags'
+      );
+
+    const parentTags =
+      detailGroup.querySelector(
+        '.detail-item.parent_tags'
+      );
+
+    const detailItem =
+      document.createElement(
+        'div'
+      );
+
+    detailItem.className =
+      'detail-item tag-relations-inline-item';
+
+    const title =
+      document.createElement(
+        'span'
+      );
+
+    title.className =
+      'detail-item-title tag-relations-inline-title';
+
+    title.textContent =
+      'Связанные теги:';
+
+    const value =
+      document.createElement(
+        'span'
+      );
+
+    value.className =
+      'detail-item-value tag-relations-inline-value';
+
     const mount =
-      document.createElement('div');
+      document.createElement(
+        'span'
+      );
 
     mount.className =
-      RELATIONS_MOUNT_CLASS;
+      INLINE_MOUNT_CLASS;
 
     mount.setAttribute(
       'data-tag-id',
       String(tagId)
     );
 
+    value.appendChild(
+      mount
+    );
+
+    detailItem.appendChild(
+      title
+    );
+
+    detailItem.appendChild(
+      value
+    );
+
+    /*
+     * Insert after sub-tags.
+     */
+    if (
+      subTags &&
+      subTags.parentElement ===
+        detailGroup
+    ) {
+      subTags.insertAdjacentElement(
+        'afterend',
+        detailItem
+      );
+    } else if (
+      parentTags &&
+      parentTags.parentElement ===
+        detailGroup
+    ) {
+      parentTags.insertAdjacentElement(
+        'afterend',
+        detailItem
+      );
+    } else {
+      detailGroup.appendChild(
+        detailItem
+      );
+    }
+
+    try {
+      mountReact(
+        mount,
+        createElement(
+          RelatedTagsInline,
+          {
+            tagId:
+              String(tagId)
+          }
+        )
+      );
+
+      log(
+        'Inline related tags mounted',
+        'tagId=' + tagId
+      );
+    } catch (error) {
+      logError(
+        'Failed to mount inline relations:',
+        error
+      );
+    }
+  }
+
+  /*
+   * ============================================================
+   * Management panel
+   * ============================================================
+   */
+
+  function findManagerMount() {
+    return document.querySelector(
+      '.' +
+        MANAGER_MOUNT_CLASS
+    );
+  }
+
+  function closeManagerPanel(
+    button
+  ) {
+    const mount =
+      findManagerMount();
+
+    if (mount) {
+      unmountReact(mount);
+      mount.remove();
+    }
+
+    if (button) {
+      button.textContent =
+        'Tag Relations';
+    }
+
+    log(
+      'Tag Relations management panel hidden'
+    );
+  }
+
+  function openManagerPanel(
+    controls,
+    tagId,
+    button
+  ) {
+    /*
+     * Do not allow duplicate mounts.
+     */
+    const existing =
+      findManagerMount();
+
+    if (existing) {
+      return;
+    }
+
+    const mount =
+      document.createElement(
+        'div'
+      );
+
+    mount.className =
+      MANAGER_MOUNT_CLASS;
+
+    mount.setAttribute(
+      'data-tag-id',
+      String(tagId)
+    );
+
+    /*
+     * Put the manager below the native
+     * Stash edit controls.
+     */
     controls.insertAdjacentElement(
       'afterend',
       mount
     );
 
-    const root =
-      createReactRoot(mount);
+    try {
+      mountReact(
+        mount,
+        createElement(
+          RelatedTagsPanel,
+          {
+            tagId:
+              String(tagId)
+          }
+        )
+      );
 
-    if (!root) {
+      button.textContent =
+        'Hide Tag Relations';
+
+      log(
+        'Tag Relations management panel opened',
+        'tagId=' + tagId
+      );
+    } catch (error) {
       logError(
-        'ReactDOM.createRoot is unavailable'
+        'Failed to mount management panel:',
+        error
       );
 
       mount.remove();
-      return;
-    }
 
-    mount.__tagRelationsRoot = root;
+      button.textContent =
+        'Tag Relations';
 
-    root.render(
-      createElement(
-        RelatedTagsPanel,
-        {
-          tagId: String(tagId)
-        }
-      )
-    );
-  }
-
-  function removeRelationsMount(
-    controls
-  ) {
-    const parent =
-      controls.parentElement;
-
-    if (!parent) {
-      return;
-    }
-
-    const mount =
-      parent.querySelector(
-        '.' +
-          RELATIONS_MOUNT_CLASS
-      );
-
-    if (mount) {
-      unmountRelationsMount(
-        mount
+      window.alert(
+        'Failed to open Tag Relations:\n' +
+          error.message
       );
     }
   }
@@ -1698,16 +2723,20 @@
     controls,
     tagId
   ) {
-    if (!controls || !tagId) {
+    if (
+      !controls ||
+      !tagId
+    ) {
       return;
     }
 
-    if (
+    const existing =
       controls.querySelector(
         '.' +
           RELATIONS_BUTTON_CLASS
-      )
-    ) {
+      );
+
+    if (existing) {
       return;
     }
 
@@ -1717,9 +2746,8 @@
       );
 
     /*
-     * We intentionally use Stash's existing
-     * Bootstrap button classes instead of
-     * redefining .btn / .btn-secondary.
+     * Use Stash's own Bootstrap styles.
+     * No generic .btn CSS is required.
      */
     button.type = 'button';
 
@@ -1736,39 +2764,28 @@
     button.addEventListener(
       'click',
       function () {
-        const parent =
-          controls.parentElement;
+        const existingMount =
+          findManagerMount();
 
-        if (!parent) {
+        if (existingMount) {
+          closeManagerPanel(
+            button
+          );
+
           return;
         }
 
-        const existing =
-          parent.querySelector(
-            '.' +
-              RELATIONS_MOUNT_CLASS
-          );
-
-        if (existing) {
-          unmountRelationsMount(
-            existing
-          );
-          button.textContent =
-            'Tag Relations';
-          return;
-        }
-
-        createRelationsMount(
+        openManagerPanel(
           controls,
-          tagId
+          tagId,
+          button
         );
-
-        button.textContent =
-          'Hide Tag Relations';
       }
     );
 
-    controls.appendChild(button);
+    controls.appendChild(
+      button
+    );
 
     log(
       'Tag Relations button added',
@@ -1776,7 +2793,55 @@
     );
   }
 
-  function scanTagEditPanel() {
+  /*
+   * ============================================================
+   * Remove stale manager
+   * ============================================================
+   */
+
+  function cleanupStaleManager() {
+    const mount =
+      findManagerMount();
+
+    if (!mount) {
+      return;
+    }
+
+    /*
+     * Stash may have replaced the entire
+     * tag page. The mount is now detached.
+     */
+    if (!mount.isConnected) {
+      unmountReact(mount);
+      return;
+    }
+
+    const tagId =
+      getCurrentTagId();
+
+    const mountTagId =
+      mount.getAttribute(
+        'data-tag-id'
+      );
+
+    if (
+      tagId &&
+      mountTagId &&
+      String(tagId) !==
+        String(mountTagId)
+    ) {
+      unmountReact(mount);
+      mount.remove();
+    }
+  }
+
+  /*
+   * ============================================================
+   * Main scan
+   * ============================================================
+   */
+
+  function scanTagPage() {
     const tagId =
       getCurrentTagId();
 
@@ -1784,24 +2849,62 @@
       return;
     }
 
+    /*
+     * Always try to install the inline
+     * relations block.
+     */
+    installInlineRelations(
+      tagId
+    );
+
+    /*
+     * Install management button only
+     * when the native edit controls exist.
+     */
     const controls =
       document.querySelector(
         EDIT_CONTROLS_SELECTOR
       );
 
-    /*
-     * We are not in edit mode.
-     */
-    if (!controls) {
+    if (controls) {
+      installRelationsButton(
+        controls,
+        tagId
+      );
+    }
+
+    cleanupStaleManager();
+  }
+
+  /*
+   * ============================================================
+   * Mutation observer
+   * ============================================================
+   */
+
+  let scanScheduled =
+    false;
+
+  function scheduleScan() {
+    if (scanScheduled) {
       return;
     }
 
-    /*
-     * TagEditPanel has appeared.
-     */
-    installRelationsButton(
-      controls,
-      tagId
+    scanScheduled = true;
+
+    requestAnimationFrame(
+      function () {
+        scanScheduled = false;
+
+        try {
+          scanTagPage();
+        } catch (error) {
+          logError(
+            'Tag page scan failed:',
+            error
+          );
+        }
+      }
     );
   }
 
@@ -1813,7 +2916,7 @@
     observer =
       new MutationObserver(
         function () {
-          scanTagEditPanel();
+          scheduleScan();
         }
       );
 
@@ -1825,10 +2928,7 @@
       }
     );
 
-    /*
-     * Initial scan.
-     */
-    scanTagEditPanel();
+    scheduleScan();
 
     log(
       'Tag page DOM observer started'
@@ -1836,7 +2936,9 @@
   }
 
   /*
-   * Start after the plugin has loaded.
+   * ============================================================
+   * Start
+   * ============================================================
    */
 
   startTagPageObserver();
