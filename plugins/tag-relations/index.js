@@ -554,6 +554,13 @@
         pendingRelationEdits.add(
           String(tagId)
         );
+
+        /*
+         * Enable Save right away instead of waiting
+         * for the tag page poll.
+         */
+
+        armSaveButton(tagId);
       }
 
       log(
@@ -1550,6 +1557,95 @@
   // Native Save button
   // ============================================================
 
+  /*
+   * Stash disables Save whenever formik.dirty is false.
+   *
+   * The related tags field lives outside Formik, and
+   * Stash exposes no Formik context, so formik.dirty
+   * can never become true for our change. Neither
+   * TagEditPanel nor DetailsEditNavbar is patchable.
+   *
+   * Enable the button ourselves while a change is
+   * pending. It is only ever re-enabled, never
+   * re-disabled: Stash re-disables it on its own
+   * whenever its dirty state flips, and the poll
+   * in patchSaveButton restores it if that happens
+   * while our change is still pending.
+   *
+   * Returns true when the button is clickable.
+   */
+
+  function enableSaveButton(tagId) {
+    if (
+      !pendingRelationEdits.has(
+        String(tagId)
+      )
+    ) {
+      return false;
+    }
+
+    const controls =
+      document.querySelector(
+        '#tag-page .details-edit'
+      );
+
+    if (!controls) {
+      return false;
+    }
+
+    const saveButton =
+      controls.querySelector(
+        'button.save'
+      );
+
+    if (!saveButton) {
+      return false;
+    }
+
+    if (saveButton.disabled) {
+      saveButton.disabled = false;
+      saveButton.removeAttribute(
+        'disabled'
+      );
+
+      log(
+        'Enabled Save for pending related tag changes:',
+        tagId
+      );
+    }
+
+    return true;
+  }
+
+  /*
+   * React may re-render the navbar and put the
+   * disabled attribute back. Retry over the next
+   * second so the very first click after editing
+   * related tags always reaches Stash's native
+   * save handler.
+   */
+
+  function armSaveButton(tagId) {
+    [
+      0, 150, 400, 800, 1600,
+    ].forEach(function (delay) {
+      if (delay === 0) {
+        enableSaveButton(tagId);
+        return;
+      }
+
+      setTimeout(function () {
+        if (
+          pendingRelationEdits.has(
+            String(tagId)
+          )
+        ) {
+          enableSaveButton(tagId);
+        }
+      }, delay);
+    });
+  }
+
   function patchSaveButton(
     tagId,
     form
@@ -1573,37 +1669,13 @@
     }
 
     /*
-     * Stash disables Save whenever formik.dirty is false.
-     *
-     * The related tags field lives outside Formik, and
-     * Stash exposes no Formik context, so formik.dirty
-     * can never become true for our change. Neither
-     * TagEditPanel nor DetailsEditNavbar is patchable.
-     *
-     * Enable the button ourselves while a change is
-     * pending. It is only ever re-enabled, never
-     * re-disabled: Stash re-disables it on its own
-     * whenever its dirty state flips, and the poll
-     * below restores it if that happens while our
+     * Only ever re-enables: Stash re-disables the
+     * button on its own whenever its dirty state
+     * flips, and this poll restores it while our
      * change is still pending.
      */
 
-    if (
-      pendingRelationEdits.has(
-        String(tagId)
-      ) &&
-      saveButton.disabled
-    ) {
-      saveButton.disabled = false;
-      saveButton.removeAttribute(
-        'disabled'
-      );
-
-      log(
-        'Enabled Save for pending related tag changes:',
-        tagId
-      );
-    }
+    enableSaveButton(tagId);
 
     if (
       saveButton.hasAttribute(
@@ -1690,6 +1762,10 @@
     const timeout =
       15000;
 
+    const warned = {
+      value: false,
+    };
+
     function check() {
       const stillInDOM =
         form.isConnected &&
@@ -1711,10 +1787,29 @@
         return;
       }
 
+      const elapsed =
+        Date.now() - started;
+
+      /*
+       * A normal Stash save completes well within
+       * this window. If the form is still here,
+       * Stash rejected the save (form validation)
+       * and the tag view page will not open.
+       */
+
       if (
-        Date.now() - started >=
-        timeout
+        !warned.value &&
+        elapsed >= 3000
       ) {
+        warned.value = true;
+
+        log(
+          'Native save has not run after 3s; ' +
+            'Stash form validation likely blocked it'
+        );
+      }
+
+      if (elapsed >= timeout) {
         log(
           'Native save did not finish within timeout; ' +
             'relations were not synchronized'
