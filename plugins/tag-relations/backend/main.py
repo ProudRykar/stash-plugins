@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+import json
+import logging
 import os
 import sys
+from typing import Any
 
 # When Stash executes backend/main.py directly, Python puts
 # .../tag-relations/backend into sys.path instead of the
@@ -10,10 +13,6 @@ PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, PLUGIN_ROOT)
-
-import json
-import logging
-from typing import Any
 
 from backend.config import load_config
 from backend.db.database import init_db
@@ -40,27 +39,13 @@ def read_input() -> dict:
         return {}
 
     try:
-        input_data = json.loads(raw)
-
-        logger.error(
-            "DEBUG PARSED INPUT: %s",
-            json.dumps(
-                input_data,
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
-        )
-
-        return input_data
+        return json.loads(raw)
 
     except json.JSONDecodeError as e:
-        logger.error(
-            "Invalid JSON input: %s",
-            e,
-        )
+        logger.error("Invalid JSON input: %s", e)
 
         return {
-            "error": {
+            "_fatal_error": {
                 "code": "INVALID_JSON",
                 "message": str(e),
             }
@@ -74,6 +59,7 @@ def write_output(result: dict) -> None:
             ensure_ascii=False,
         )
     )
+    sys.stdout.write("\n")
     sys.stdout.flush()
 
 
@@ -83,22 +69,17 @@ def error_response(
 ) -> dict:
     return {
         "ok": False,
-        "error": {
-            "code": code,
-            "message": message,
-        },
+        "error": f"{code}: {message}",
+        "output": None,
     }
 
 
 def success_response(data: Any = None) -> dict:
-    result = {
+    return {
         "ok": True,
+        "error": None,
+        "output": data,
     }
-
-    if data is not None:
-        result["data"] = data
-
-    return result
 
 
 def get_plugin_dir() -> str:
@@ -153,17 +134,22 @@ def get_hook_context(input_data: dict) -> dict | None:
 
 
 def dispatch_operation(input_data: dict) -> dict:
-
     plugin_dir = get_plugin_dir()
 
     settings = get_settings(input_data)
     server_connection = get_server_connection(input_data)
 
-
     config = load_config(
         plugin_dir,
         settings,
         server_connection,
+    )
+
+    logger.debug(
+        "Config: database_path=%r stash_url=%r api_key=%s",
+        config.database_path,
+        config.stash_url,
+        bool(config.stash_api_key),
     )
 
     init_db(config.database_path)
@@ -232,16 +218,9 @@ def dispatch_operation(input_data: dict) -> dict:
     operation = args.get("operation")
 
     logger.info(
-        "Operation requested: %r args=%r",
+        "Operation requested: %r",
         operation,
-        args,
     )
-
-    if not isinstance(args, dict):
-        return error_response(
-            "INVALID_ARGS",
-            "args must be an object",
-        )
 
     if not operation:
         return error_response(
@@ -397,10 +376,12 @@ def dispatch_operation(input_data: dict) -> dict:
 
         elif operation == "set_relations":
             tag_id = args.get("tag_id")
+
             similar_ids = args.get(
                 "similar_ids",
                 [],
             )
+
             related_ids = args.get(
                 "related_ids",
                 [],
@@ -559,8 +540,24 @@ def main() -> int:
     try:
         input_data = read_input()
 
-        if "error" in input_data:
-            write_output(input_data)
+        if not input_data:
+            result = error_response(
+                "EMPTY_INPUT",
+                "Plugin received empty input",
+            )
+
+            write_output(result)
+            return 1
+
+        if "_fatal_error" in input_data:
+            fatal = input_data["_fatal_error"]
+
+            result = error_response(
+                fatal["code"],
+                fatal["message"],
+            )
+
+            write_output(result)
             return 1
 
         result = dispatch_operation(
@@ -572,8 +569,6 @@ def main() -> int:
         return 0 if result.get("ok") else 1
 
     except Exception as e:
-        # Last-resort protection so we get the actual traceback in
-        # Stash's stderr instead of only "exit status 1".
         logger.exception(
             "Fatal plugin error"
         )
