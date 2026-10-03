@@ -4,9 +4,11 @@
   const PLUGIN_ID = 'tag-relations';
 
   const INLINE_ITEM_CLASS = 'tag-relations-inline-item';
-  const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
+  const INLINE_MOUNT_CLASS = 'tag-relations-inline-mount';
 
+  const EDIT_FIELDS_CLASS = 'tag-relations-edit-fields';
   const EDIT_FIELDS_MARKER = 'data-tag-relations-fields';
+
   const SAVE_PATCH_MARKER = 'data-tag-relations-save-patched';
 
   const relationCache = new Map();
@@ -16,6 +18,10 @@
   let currentTagId = null;
   let editScanTimer = null;
   let routeListenerInstalled = false;
+
+  // ============================================================
+  // Logging
+  // ============================================================
 
   function log() {
     console.log('[Tag Relations]', ...arguments);
@@ -120,17 +126,6 @@
         throw new Error(message);
       }
 
-      /*
-       * Backend returns:
-       *
-       * {
-       *   ok: true,
-       *   error: null,
-       *   output: {...}
-       * }
-       *
-       * The actual plugin result is in `output`.
-       */
       if (
         Object.prototype.hasOwnProperty.call(
           data,
@@ -140,10 +135,6 @@
         return data.output;
       }
 
-      /*
-       * Backwards compatibility with the old
-       * `{ ok: true, data: ... }` shape.
-       */
       if (
         Object.prototype.hasOwnProperty.call(
           data,
@@ -374,6 +365,15 @@
     const result = [];
     const seen = new Set();
 
+    /*
+     * The current UI exposes one concept:
+     * "Related Tags".
+     *
+     * The backend may still contain both
+     * similar and related relations, therefore
+     * both are displayed here.
+     */
+
     similar
       .concat(related)
       .forEach(function (tag) {
@@ -488,7 +488,8 @@
             })
         : [];
 
-    const state = useState(initialIds);
+    const state =
+      useState(initialIds);
 
     const selectedIds = state[0];
     const setSelectedIds = state[1];
@@ -558,14 +559,6 @@
       );
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * TagIDSelect is the native Stash selector.
-     *
-     * `isMulti: true` is required because the
-     * default is single-select.
-     */
     return createElement(
       TagIDSelect,
       {
@@ -574,9 +567,7 @@
             return String(id);
           }
         ),
-
         isMulti: true,
-
         onSelect: handleSelect,
       }
     );
@@ -626,9 +617,10 @@
           );
 
         /*
-         * null = not loaded.
-         * []   = loaded and empty.
+         * null = not loaded
+         * []   = loaded and empty
          */
+
         if (Array.isArray(existing)) {
           setRelations(
             existing.map(function (id) {
@@ -890,7 +882,7 @@
 
       const oldMount =
         item.querySelector(
-          '.tag-relations-inline-mount'
+          '.' + INLINE_MOUNT_CLASS
         );
 
       if (oldMount) {
@@ -932,7 +924,7 @@
       document.createElement('span');
 
     mount.className =
-      'tag-relations-inline-mount';
+      INLINE_MOUNT_CLASS;
 
     mount.setAttribute(
       'data-tag-id',
@@ -940,7 +932,6 @@
     );
 
     value.appendChild(mount);
-
     item.appendChild(title);
     item.appendChild(value);
 
@@ -992,26 +983,26 @@
   // Edit view
   // ============================================================
 
+  function findEditContainers(form) {
+    return Array.from(
+      form.querySelectorAll(
+        '.' + EDIT_FIELDS_CLASS
+      )
+    );
+  }
+
   function removeDuplicateEditFields(form) {
     const containers =
-      Array.from(
-        form.querySelectorAll(
-          '.' +
-            EDIT_FIELDS_CLASS +
-            '[' +
-            EDIT_FIELDS_MARKER +
-            '="true"]'
-        )
-      );
+      findEditContainers(form);
 
-    if (containers.length <= 1) {
-      return containers[0] || null;
+    if (containers.length === 0) {
+      return null;
     }
 
     /*
-     * Keep the first container.
-     * Destroy all duplicate React roots.
+     * Keep exactly one container.
      */
+
     const keeper = containers[0];
 
     containers
@@ -1025,7 +1016,29 @@
         element.remove();
       });
 
+    keeper.setAttribute(
+      EDIT_FIELDS_MARKER,
+      'true'
+    );
+
     return keeper;
+  }
+
+  function createEditFieldsContainer(form) {
+    const container =
+      document.createElement('div');
+
+    container.className =
+      EDIT_FIELDS_CLASS;
+
+    container.setAttribute(
+      EDIT_FIELDS_MARKER,
+      'true'
+    );
+
+    form.appendChild(container);
+
+    return container;
   }
 
   function installEditFields(tagId) {
@@ -1038,35 +1051,65 @@
       return;
     }
 
+    const numericTagId =
+      Number(tagId);
+
     /*
      * IMPORTANT:
      *
-     * The marker belongs to the container,
-     * not the form.
+     * scanTagPage() runs every 500 ms.
      *
-     * Therefore we must search INSIDE the form.
+     * The form itself is our lifecycle owner.
+     *
+     * If this exact form has already been initialized
+     * for this exact tag, DO NOT touch the React tree.
      */
+
+    if (
+      form.__tagRelationsInitialized === true &&
+      form.__tagRelationsTagId === numericTagId
+    ) {
+      patchSaveButton(
+        numericTagId,
+        form
+      );
+
+      return;
+    }
+
+    /*
+     * If Stash replaced the form, its expando properties
+     * are gone and we initialize the new form.
+     *
+     * If Stash reused the form for another tag,
+     * clean the old React tree first.
+     */
+
+    if (
+      form.__tagRelationsInitialized === true
+    ) {
+      findEditContainers(form)
+        .forEach(function (element) {
+          unmountReact(element);
+          element.remove();
+        });
+    }
+
+    /*
+     * Remove any duplicates that may have been left
+     * by an older version of the plugin.
+     */
+
     let fieldsContainer =
       removeDuplicateEditFields(form);
 
     if (!fieldsContainer) {
       fieldsContainer =
-        document.createElement('div');
-
-      fieldsContainer.className =
-        EDIT_FIELDS_CLASS;
-
-      fieldsContainer.setAttribute(
-        EDIT_FIELDS_MARKER,
-        'true'
-      );
-
-      form.appendChild(
-        fieldsContainer
-      );
+        createEditFieldsContainer(form);
     }
 
-    const key = String(tagId);
+    const key =
+      String(numericTagId);
 
     if (!editStates.has(key)) {
       editStates.set(
@@ -1076,9 +1119,20 @@
     }
 
     /*
-     * Do not mount another React root into an
-     * already mounted container.
+     * Mark the FORM before mounting React.
+     *
+     * This prevents another polling pass from
+     * attempting another initialization.
      */
+
+    form.__tagRelationsInitialized = true;
+    form.__tagRelationsTagId =
+      numericTagId;
+
+    /*
+     * Exactly one React root per container.
+     */
+
     if (!fieldsContainer.__tagRelationsRoot) {
       try {
         mountReact(
@@ -1086,7 +1140,7 @@
           createElement(
             RelationEditFields,
             {
-              tagId: tagId,
+              tagId: numericTagId,
             }
           )
         );
@@ -1096,15 +1150,21 @@
           error
         );
 
-        unmountReact(fieldsContainer);
+        unmountReact(
+          fieldsContainer
+        );
+
         fieldsContainer.remove();
+
+        delete form.__tagRelationsInitialized;
+        delete form.__tagRelationsTagId;
 
         return;
       }
     }
 
     patchSaveButton(
-      tagId,
+      numericTagId,
       form
     );
   }
@@ -1132,15 +1192,15 @@
       return;
     }
 
-    /*
-     * If the button already belongs to this exact
-     * form/tag, do nothing.
-     */
     const patchedForm =
       saveButton.__tagRelationsForm;
 
     const patchedTagId =
       saveButton.__tagRelationsTagId;
+
+    /*
+     * Already patched for exactly this form and tag.
+     */
 
     if (
       patchedForm === form &&
@@ -1150,9 +1210,10 @@
     }
 
     /*
-     * Remove an old plugin listener if Stash replaced
-     * the edit form/button.
+     * The button may have survived while Stash
+     * replaced the form.
      */
+
     if (
       saveButton.__tagRelationsSaveHandler
     ) {
@@ -1227,11 +1288,9 @@
     form,
     relationIds
   ) {
-    /*
-     * Prevent duplicate synchronization if the user
-     * somehow causes multiple click handlers.
-     */
-    if (form.__tagRelationsSaveWaiting) {
+    if (
+      form.__tagRelationsSaveWaiting
+    ) {
       return;
     }
 
@@ -1255,9 +1314,10 @@
         currentForm === form;
 
       /*
-       * Native Stash save normally causes the edit form
-       * to disappear/re-render.
+       * Native Stash save normally causes the edit
+       * form to disappear or be replaced.
        */
+
       if (!stillInDOM) {
         form.__tagRelationsSaveWaiting =
           false;
@@ -1316,12 +1376,13 @@
           tag_id: Number(tagId),
 
           /*
-           * The UI exposes a single relation concept:
+           * The UI exposes one relation type:
            * "related".
            *
-           * Therefore all selected IDs go into related_ids
-           * and existing "similar" relations are removed.
+           * Therefore all selected IDs become related_ids.
+           * Existing similar relations are removed.
            */
+
           similar_ids: [],
           related_ids: relationIds,
         }
@@ -1356,6 +1417,10 @@
   // ============================================================
 
   function cleanupPluginUI() {
+    /*
+     * Inline React components.
+     */
+
     document
       .querySelectorAll(
         '.' + INLINE_ITEM_CLASS
@@ -1363,7 +1428,7 @@
       .forEach(function (element) {
         const mount =
           element.querySelector(
-            '.tag-relations-inline-mount'
+            '.' + INLINE_MOUNT_CLASS
           );
 
         if (mount) {
@@ -1372,6 +1437,10 @@
 
         element.remove();
       });
+
+    /*
+     * Edit React components.
+     */
 
     document
       .querySelectorAll(
@@ -1383,8 +1452,9 @@
       });
 
     /*
-     * Remove our Save listener from any old button.
+     * Remove plugin Save handlers.
      */
+
     document
       .querySelectorAll(
         'button[' +
@@ -1411,6 +1481,20 @@
         );
       });
 
+    /*
+     * Clear lifecycle markers from forms.
+     */
+
+    document
+      .querySelectorAll(
+        '#tag-page #tag-edit'
+      )
+      .forEach(function (form) {
+        delete form.__tagRelationsInitialized;
+        delete form.__tagRelationsTagId;
+        delete form.__tagRelationsSaveWaiting;
+      });
+
     editStates.clear();
   }
 
@@ -1422,16 +1506,22 @@
     const tagId =
       getCurrentTagId();
 
+    /*
+     * We are no longer on a tag page.
+     */
+
     if (!tagId) {
-      if (
-        currentTagId !== null
-      ) {
+      if (currentTagId !== null) {
         cleanupPluginUI();
         currentTagId = null;
       }
 
       return;
     }
+
+    /*
+     * We navigated from one tag to another.
+     */
 
     if (
       currentTagId !== null &&
@@ -1481,9 +1571,10 @@
         'stash:location',
         function () {
           /*
-           * Stash may need a render cycle before the
-           * tag page exists in the DOM.
+           * Stash may need a render cycle before
+           * the tag page exists in the DOM.
            */
+
           setTimeout(
             scanTagPage,
             0
