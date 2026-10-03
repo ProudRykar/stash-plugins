@@ -35,9 +35,6 @@ logger = logging.getLogger(__name__)
 def read_input() -> dict:
     raw = sys.stdin.read()
 
-    # DEBUG: stderr only, never stdout.
-    logger.error("DEBUG RAW INPUT: %r", raw)
-
     if not raw.strip():
         logger.error("Received empty stdin")
         return {}
@@ -156,49 +153,17 @@ def get_hook_context(input_data: dict) -> dict | None:
 
 
 def dispatch_operation(input_data: dict) -> dict:
-    logger.error(
-        "DEBUG dispatch_operation input: %s",
-        json.dumps(
-            input_data,
-            ensure_ascii=False,
-            sort_keys=True,
-        ),
-    )
 
     plugin_dir = get_plugin_dir()
 
     settings = get_settings(input_data)
     server_connection = get_server_connection(input_data)
 
-    logger.error(
-        "DEBUG settings: %s",
-        json.dumps(
-            settings,
-            ensure_ascii=False,
-            sort_keys=True,
-        ),
-    )
-
-    logger.error(
-        "DEBUG server_connection: %s",
-        json.dumps(
-            server_connection,
-            ensure_ascii=False,
-            sort_keys=True,
-        ),
-    )
 
     config = load_config(
         plugin_dir,
         settings,
         server_connection,
-    )
-
-    logger.error(
-        "DEBUG config: database_path=%r stash_url=%r api_key=%s",
-        config.database_path,
-        config.stash_url,
-        bool(config.stash_api_key),
     )
 
     init_db(config.database_path)
@@ -256,8 +221,15 @@ def dispatch_operation(input_data: dict) -> dict:
             }
         )
 
-    operation = input_data.get("operation")
     args = input_data.get("args", {})
+
+    if not isinstance(args, dict):
+        return error_response(
+            "INVALID_ARGS",
+            "args must be an object",
+        )
+
+    operation = args.get("operation")
 
     logger.info(
         "Operation requested: %r args=%r",
