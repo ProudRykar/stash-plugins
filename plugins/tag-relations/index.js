@@ -19,6 +19,14 @@
    */
   const pendingRelationEdits = new Set();
 
+  /*
+   * tagId -> 'loading' | 'failed'
+   *
+   * Keeps the 500ms scan from issuing a request on every
+   * tick while the previous one is still running.
+   */
+  const inlineInstallState = new Map();
+
   let currentTagId = null;
   let editScanTimer = null;
   let routeListenerInstalled = false;
@@ -29,6 +37,52 @@
 
   function logError() {
     console.error('[Tag Relations]', ...arguments);
+  }
+
+  // ============================================================
+  // Localisation
+  //
+  // Stash writes <html lang="..."> from its interface.language
+  // setting via react-helmet (App.tsx htmlAttributes).
+  // ============================================================
+
+  const MESSAGES = {
+    en: {
+      relatedTags: 'Related Tags',
+      loading: 'Loading...',
+      loadingRelations: 'Loading related tags...',
+      loadRelationsError: 'Failed to load related tags: ',
+      selectorError: 'Failed to load the tag selector',
+      saveRelationsError: 'Failed to save related tags:\n\n',
+    },
+
+    ru: {
+      relatedTags: 'Связанные теги',
+      loading: 'Загрузка...',
+      loadingRelations: 'Загрузка связанных тегов...',
+      loadRelationsError: 'Не удалось загрузить связанные теги: ',
+      selectorError: 'Не удалось загрузить выбор тегов',
+      saveRelationsError: 'Не удалось сохранить связанные теги:\n\n',
+    },
+  };
+
+  function getLanguage() {
+    const lang =
+      (document.documentElement &&
+        document.documentElement.lang) ||
+      '';
+
+    return lang.toLowerCase().indexOf('ru') === 0
+      ? 'ru'
+      : 'en';
+  }
+
+  function t(key) {
+    const table = MESSAGES[getLanguage()];
+
+    return table[key] !== undefined
+      ? table[key]
+      : key;
   }
 
   // ============================================================
@@ -362,6 +416,7 @@
 
     relationCache.delete(key);
     relationRequests.delete(key);
+    inlineInstallState.delete(key);
   }
 
   function getRelations(tagId) {
@@ -517,7 +572,7 @@
           className:
             'tag-relations-native-select-error text-danger',
         },
-        'Не удалось загрузить выбор тегов'
+        t('selectorError')
       );
     }
 
@@ -681,7 +736,7 @@
           className:
             'tag-relations-edit-loading',
         },
-        'Загрузка связанных тегов...'
+        t('loadingRelations')
       );
     }
 
@@ -692,8 +747,7 @@
           className:
             'tag-relations-edit-error text-danger',
         },
-        'Не удалось загрузить связанные теги: ' +
-          error.message
+        t('loadRelationsError') + error.message
       );
     }
 
@@ -710,7 +764,7 @@
           className:
             'form-label col-form-label col-xl-2 col-sm-3',
         },
-        'Связанные теги'
+        t('relatedTags')
       ),
 
       createElement(
@@ -1161,7 +1215,7 @@
           className:
             'tag-relations-inline-loading',
         },
-        'Загрузка...'
+        t('loading')
       );
     }
 
@@ -1316,89 +1370,43 @@
   // Normal view
   // ============================================================
 
-  function installInlineRelations(tagId) {
-    const detailGroup =
-      document.querySelector(
-        '#tag-page .detail-group'
-      );
-
-    if (!detailGroup) {
+  function removeInlineItem(item) {
+    if (!item) {
       return;
     }
 
-    let item =
-      detailGroup.querySelector(
-        '.' +
-          INLINE_ITEM_CLASS
-      );
+    const mount = item.querySelector(
+      '.tag-relations-inline-mount'
+    );
 
-    if (item) {
-      if (
-        item.getAttribute(
-          'data-tag-id'
-        ) === String(tagId)
-      ) {
-        return;
-      }
-
-      const oldMount =
-        item.querySelector(
-          '.tag-relations-inline-mount'
-        );
-
-      if (oldMount) {
-        unmountReact(oldMount);
-      }
-
-      item.remove();
-      item = null;
+    if (mount) {
+      unmountReact(mount);
     }
 
-    item =
-      document.createElement(
-        'div'
-      );
+    item.remove();
+  }
+
+  function createInlineItem(detailGroup, tagId) {
+    const item = document.createElement('div');
 
     item.className =
-      'detail-item ' +
-      INLINE_ITEM_CLASS;
+      'detail-item ' + INLINE_ITEM_CLASS;
 
     item.setAttribute(
       'data-tag-id',
       String(tagId)
     );
 
-    const title =
-      document.createElement(
-        'span'
-      );
+    const title = document.createElement('span');
+    title.className = 'detail-item-title';
+    title.textContent = t('relatedTags') + ':';
 
-    title.className =
-      'detail-item-title';
+    const value = document.createElement('span');
+    value.className = 'detail-item-value';
 
-    title.textContent =
-      'Связанные теги:';
-
-    const value =
-      document.createElement(
-        'span'
-      );
-
-    value.className =
-      'detail-item-value';
-
-    const mount =
-      document.createElement(
-        'span'
-      );
-
-    mount.className =
-      'tag-relations-inline-mount';
-
-    mount.setAttribute(
-      'data-tag-id',
-      String(tagId)
-    );
+    const mount = document.createElement('span');
+    mount.className = 'tag-relations-inline-mount';
+    mount.setAttribute('data-tag-id', String(tagId));
 
     value.appendChild(mount);
     item.appendChild(title);
@@ -1408,26 +1416,18 @@
      * Put after Sub Tags.
      */
 
-    const subTags =
-      detailGroup.querySelector(
-        '.detail-item.sub_tags'
-      );
+    const subTags = detailGroup.querySelector(
+      '.detail-item.sub_tags'
+    );
 
-    const parentTags =
-      detailGroup.querySelector(
-        '.detail-item.parent_tags'
-      );
+    const parentTags = detailGroup.querySelector(
+      '.detail-item.parent_tags'
+    );
 
     if (subTags) {
-      subTags.insertAdjacentElement(
-        'afterend',
-        item
-      );
+      subTags.insertAdjacentElement('afterend', item);
     } else if (parentTags) {
-      parentTags.insertAdjacentElement(
-        'afterend',
-        item
-      );
+      parentTags.insertAdjacentElement('afterend', item);
     } else {
       detailGroup.appendChild(item);
     }
@@ -1435,22 +1435,115 @@
     try {
       mountReact(
         mount,
-        createElement(
-          RelatedTagsInline,
-          {
-            tagId:
-              String(tagId),
-          }
-        )
+        createElement(RelatedTagsInline, {
+          tagId: String(tagId),
+        })
       );
     } catch (error) {
-      logError(
-        'Failed to mount inline relations:',
-        error
-      );
-
+      logError('Failed to mount inline relations:', error);
       item.remove();
     }
+  }
+
+  /*
+   * The row is only rendered when the tag actually has
+   * related tags, so an empty tag does not show a bare
+   * "Related Tags:" heading.
+   */
+  function installInlineRelations(tagId) {
+    const detailGroup = document.querySelector(
+      '#tag-page .detail-group'
+    );
+
+    if (!detailGroup) {
+      return;
+    }
+
+    const key = String(tagId);
+
+    let item = detailGroup.querySelector(
+      '.' + INLINE_ITEM_CLASS
+    );
+
+    if (item) {
+      if (item.getAttribute('data-tag-id') !== key) {
+        removeInlineItem(item);
+        item = null;
+      } else if (relationCache.has(key)) {
+        /*
+         * Cached data is authoritative. Remove the row
+         * once the last relation goes away.
+         */
+
+        if (relationCache.get(key).length === 0) {
+          removeInlineItem(item);
+          item = null;
+        } else {
+          return;
+        }
+      } else {
+        /*
+         * Cache was invalidated (relations were just
+         * saved). Drop the row and rebuild it from
+         * fresh data below.
+         */
+
+        removeInlineItem(item);
+        item = null;
+      }
+    }
+
+    if (relationCache.has(key)) {
+      if (relationCache.get(key).length > 0) {
+        createInlineItem(detailGroup, tagId);
+      }
+
+      return;
+    }
+
+    const state = inlineInstallState.get(key);
+
+    if (state === 'loading' || state === 'failed') {
+      return;
+    }
+
+    inlineInstallState.set(key, 'loading');
+
+    getRelations(tagId)
+      .then(function (relations) {
+        inlineInstallState.delete(key);
+
+        if (getCurrentTagId() !== tagId) {
+          return;
+        }
+
+        const group = document.querySelector(
+          '#tag-page .detail-group'
+        );
+
+        if (!group) {
+          return;
+        }
+
+        if (
+          group.querySelector('.' + INLINE_ITEM_CLASS)
+        ) {
+          return;
+        }
+
+        if (Array.isArray(relations) && relations.length > 0) {
+          createInlineItem(group, tagId);
+        }
+      })
+      .catch(function (error) {
+        logError('Failed to load inline relations:', error);
+
+        inlineInstallState.set(key, 'failed');
+
+        setTimeout(function () {
+          inlineInstallState.delete(key);
+        }, 30000);
+      });
   }
 
   // ============================================================
@@ -1705,8 +1798,7 @@
       );
 
       window.alert(
-        'Не удалось сохранить связанные теги:\n\n' +
-          error.message
+        t('saveRelationsError') + error.message
       );
     }
   }
