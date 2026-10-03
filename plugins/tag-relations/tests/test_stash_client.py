@@ -72,7 +72,9 @@ class TestStashClient:
     def test_get_tag_success(self, mock_urlopen, client):
         mock_response = Mock()
         mock_response.read.return_value = json.dumps({
-            "data": {"tag": {"id": "42", "name": "Test Tag"}}
+            "data": {"findTags": {"tags": [
+                {"id": "42", "name": "Test Tag"}
+            ]}}
         }).encode()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
@@ -101,10 +103,10 @@ class TestStashClient:
     def test_find_tags(self, mock_urlopen, client):
         mock_response = Mock()
         mock_response.read.return_value = json.dumps({
-            "data": {"findTags": [
+            "data": {"findTags": {"tags": [
                 {"id": "1", "name": "Tag 1"},
                 {"id": "2", "name": "Tag 2"},
-            ]}
+            ]}}
         }).encode()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
@@ -119,10 +121,10 @@ class TestStashClient:
     def test_get_tags(self, mock_urlopen, client):
         mock_response = Mock()
         mock_response.read.return_value = json.dumps({
-            "data": {"tags": [
+            "data": {"findTags": {"tags": [
                 {"id": "1", "name": "Tag 1"},
                 {"id": "3", "name": "Tag 3"},
-            ]}
+            ]}}
         }).encode()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
@@ -137,10 +139,10 @@ class TestStashClient:
     def test_validate_tags_exist(self, mock_urlopen, client):
         mock_response = Mock()
         mock_response.read.return_value = json.dumps({
-            "data": {"tags": [
+            "data": {"findTags": {"tags": [
                 {"id": "1", "name": "Tag 1"},
                 {"id": "3", "name": "Tag 3"},
-            ]}
+            ]}}
         }).encode()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
@@ -153,3 +155,78 @@ class TestStashClient:
     def test_validate_tags_exist_empty(self, client):
         existing = client.validate_tags_exist([])
         assert existing == set()
+
+
+class TestStashClientAuthHeaders:
+    @patch('urllib.request.urlopen')
+    def test_sends_api_key_header(self, mock_urlopen):
+        client = StashClient(
+            "http://localhost:9999",
+            api_key="test-key",
+        )
+
+        self._prime_mock(mock_urlopen)
+        client.execute("query { findTags { id } }")
+
+        headers = self._request_headers(mock_urlopen)
+        assert headers.get("apikey") == "test-key"
+        assert "cookie" not in headers
+
+    @patch('urllib.request.urlopen')
+    def test_sends_session_cookie_header(self, mock_urlopen):
+        client = StashClient(
+            "http://localhost:9999",
+            session_cookie="session=abc123",
+        )
+
+        self._prime_mock(mock_urlopen)
+        client.execute("query { findTags { id } }")
+
+        headers = self._request_headers(mock_urlopen)
+        assert headers.get("cookie") == "session=abc123"
+        assert "apikey" not in headers
+
+    @patch('urllib.request.urlopen')
+    def test_sends_both_headers(self, mock_urlopen):
+        client = StashClient(
+            "http://localhost:9999",
+            api_key="test-key",
+            session_cookie="session=abc123",
+        )
+
+        self._prime_mock(mock_urlopen)
+        client.execute("query { findTags { id } }")
+
+        headers = self._request_headers(mock_urlopen)
+        assert headers.get("apikey") == "test-key"
+        assert headers.get("cookie") == "session=abc123"
+
+    @patch('urllib.request.urlopen')
+    def test_no_auth_headers_without_credentials(self, mock_urlopen):
+        client = StashClient("http://localhost:9999")
+
+        self._prime_mock(mock_urlopen)
+        client.execute("query { findTags { id } }")
+
+        headers = self._request_headers(mock_urlopen)
+        assert "apikey" not in headers
+        assert "cookie" not in headers
+
+    @staticmethod
+    def _request_headers(mock_urlopen):
+        request = mock_urlopen.call_args[0][0]
+
+        return {
+            key.lower(): value
+            for key, value in request.header_items()
+        }
+
+    @staticmethod
+    def _prime_mock(mock_urlopen):
+        mock_response = Mock()
+        mock_response.read.return_value = json.dumps({
+            "data": {}
+        }).encode()
+        mock_response.__enter__ = Mock(return_value=mock_response)
+        mock_response.__exit__ = Mock(return_value=False)
+        mock_urlopen.return_value = mock_response

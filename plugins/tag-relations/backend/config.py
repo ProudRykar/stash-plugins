@@ -1,7 +1,11 @@
+import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from backend.errors import PluginError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,6 +13,55 @@ class Config:
     database_path: str
     stash_url: str
     stash_api_key: str | None = None
+    stash_session_cookie: str | None = None
+
+
+def _session_cookie_header(server_connection: dict) -> str | None:
+    cookie = server_connection.get("SessionCookie")
+
+    if isinstance(cookie, dict):
+        name = str(cookie.get("Name") or "").strip()
+        value = str(cookie.get("Value") or "").strip()
+
+        if name and value:
+            return f"{name}={value}"
+
+        return None
+
+    if isinstance(cookie, str):
+        cookie = cookie.strip()
+
+        return cookie or None
+
+    return None
+
+
+def _api_key_from_stash_config(server_connection: dict) -> str | None:
+    config_dir = str(server_connection.get("Dir") or "").strip()
+
+    if not config_dir:
+        return None
+
+    config_path = (
+        config_dir
+        if os.path.isfile(config_dir)
+        else os.path.join(config_dir, "config.yml")
+    )
+
+    try:
+        with open(config_path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("api_key:"):
+                    return line.split(":", 1)[1].strip() or None
+
+    except OSError as e:
+        logger.warning(
+            "Could not read Stash config at %s: %s",
+            config_path,
+            e,
+        )
+
+    return None
 
 
 def load_config(
@@ -48,8 +101,17 @@ def load_config(
 
     api_key = settings.get("api_key", "").strip() or None
 
+    # Stash does not send plugin settings on stdin, so fall back to the API
+    # key of the running Stash instance (config.yml is pointed at by
+    # server_connection["Dir"]).
+    if not api_key:
+        api_key = _api_key_from_stash_config(server_connection)
+
     return Config(
         database_path=db_path,
         stash_url=stash_url.rstrip("/"),
         stash_api_key=api_key,
+        stash_session_cookie=_session_cookie_header(
+            server_connection
+        ),
     )

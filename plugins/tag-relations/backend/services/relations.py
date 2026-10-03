@@ -18,7 +18,11 @@ class RelationService:
     def __init__(self, config: Config):
         self.config = config
         self.repository = RelationRepository(config.database_path)
-        self.stash = StashClient(config.stash_url, config.stash_api_key)
+        self.stash = StashClient(
+            config.stash_url,
+            config.stash_api_key,
+            config.stash_session_cookie,
+        )
 
     def _validate_tags(self, tag_a_id: int, tag_b_id: int) -> None:
         if tag_a_id == tag_b_id:

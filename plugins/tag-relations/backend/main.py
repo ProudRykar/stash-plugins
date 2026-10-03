@@ -145,11 +145,23 @@ def dispatch_operation(input_data: dict) -> dict:
         server_connection,
     )
 
-    logger.debug(
-        "Config: database_path=%r stash_url=%r api_key=%s",
+    logger.info(
+        "Plugin settings keys: %s",
+        sorted(settings.keys()),
+    )
+
+    logger.info(
+        "Server connection keys: %s",
+        sorted(server_connection.keys()),
+    )
+
+    logger.info(
+        "Config: database_path=%r stash_url=%r api_key=%s "
+        "session_cookie=%s",
         config.database_path,
         config.stash_url,
         bool(config.stash_api_key),
+        bool(config.stash_session_cookie),
     )
 
     init_db(config.database_path)

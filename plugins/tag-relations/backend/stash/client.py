@@ -36,10 +36,24 @@ query Tags($ids: [ID!]!) {
 
 
 class StashClient:
-    def __init__(self, base_url: str, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: Optional[str] = None,
+        session_cookie: Optional[str] = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        self.session_cookie = session_cookie
         self.graphql_url = f"{self.base_url}/graphql"
+
+        logger.info(
+            "Stash client configured: url=%s api_key_present=%s "
+            "session_cookie_present=%s",
+            self.graphql_url,
+            bool(self.api_key),
+            bool(self.session_cookie),
+        )
 
     def _request(
         self,
@@ -60,6 +74,17 @@ class StashClient:
 
         if self.api_key:
             headers["ApiKey"] = self.api_key
+
+        if self.session_cookie:
+            headers["Cookie"] = self.session_cookie
+
+        logger.info(
+            "GraphQL request: url=%s api_key_present=%s "
+            "session_cookie_present=%s",
+            self.graphql_url,
+            bool(self.api_key),
+            bool(self.session_cookie),
+        )
 
         request = urllib.request.Request(
             self.graphql_url,

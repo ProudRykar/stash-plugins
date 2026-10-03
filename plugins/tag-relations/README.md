@@ -34,10 +34,16 @@ Python Backend (external plugin)
 
 2. Restart Stash
 
-3. Configure the plugin in Settings → Plugins → Tag Relations:
-   - Database path (optional, defaults to plugin data directory)
-   - Stash URL (optional, defaults to localhost:9999)
-   - API Key (optional, uses session cookie if not provided)
+3. No credentials need to be copied by hand. On every plugin run Stash passes
+   the connection details in `server_connection`, and the backend authenticates
+   against the GraphQL API using, in order of priority:
+   - an explicit `api_key` supplied with the operation (optional override),
+   - the API key of the running Stash instance read from `config.yml`
+     (directory passed by Stash in `server_connection.Dir`),
+   - the Stash session cookie passed in `server_connection.SessionCookie`.
+
+   The Stash URL defaults to `127.0.0.1:<port>` from `server_connection`, and
+   the database defaults to `backend/data/tag-relations.sqlite`.
 
 ## Usage
 
