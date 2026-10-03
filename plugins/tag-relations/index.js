@@ -20,14 +20,17 @@ const query = `       mutation($id: ID!, $args: Map) {
 
 const variables = {
   id: PLUGIN_ID,
-  args: Object.assign({ operation: operation }, args || {})
+  args: Object.assign(
+    { operation: operation },
+    args || {}
+  )
 };
 
 try {
   const response = await fetch('/graphql', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json'
     },
     credentials: 'same-origin',
     body: JSON.stringify({
@@ -38,7 +41,10 @@ try {
 
   if (!response.ok) {
     throw new Error(
-      'HTTP ' + response.status + ': ' + response.statusText
+      'HTTP ' +
+        response.status +
+        ': ' +
+        response.statusText
     );
   }
 
@@ -47,8 +53,8 @@ try {
   if (result.errors) {
     throw new Error(
       result.errors
-        .map(function (e) {
-          return e.message;
+        .map(function (error) {
+          return error.message;
         })
         .join(', ')
     );
@@ -58,7 +64,8 @@ try {
 
   if (!data.ok) {
     throw new Error(
-      data.error?.message || 'Operation failed'
+      (data.error && data.error.message) ||
+        'Operation failed'
     );
   }
 
@@ -69,13 +76,28 @@ try {
     operation,
     error
   );
+
   throw error;
 }
 
 
 }
 
+/*
+
+* ============================================================
+* React
+* ============================================================
+  */
+
 const React = window.PluginApi.React;
+
+if (!React) {
+logError(
+'PluginApi.React is unavailable'
+);
+return;
+}
 
 const createElement = React.createElement;
 const useState = React.useState;
@@ -91,13 +113,13 @@ const Fragment = React.Fragment;
   */
 
 function RelationRow(_ref) {
-var tag = _ref.tag;
-var relationType = _ref.relationType;
-var sourceTagId = _ref.sourceTagId;
-var onDelete = _ref.onDelete;
+const tag = _ref.tag;
+const relationType = _ref.relationType;
+const sourceTagId = _ref.sourceTagId;
+const onDelete = _ref.onDelete;
 
 
-var handleDelete = function () {
+const handleDelete = function () {
   if (
     !window.confirm(
       'Remove ' +
@@ -135,6 +157,7 @@ return createElement(
   {
     className: 'relation-row'
   },
+
   createElement(
     'span',
     {
@@ -142,6 +165,7 @@ return createElement(
     },
     tag.name
   ),
+
   createElement(
     'span',
     {
@@ -151,6 +175,7 @@ return createElement(
     },
     relationType
   ),
+
   createElement(
     'button',
     {
@@ -174,29 +199,29 @@ return createElement(
   */
 
 function AddRelationModal(_ref) {
-var sourceTagId = _ref.sourceTagId;
-var relationType = _ref.relationType;
-var onClose = _ref.onClose;
-var onAdd = _ref.onAdd;
+const sourceTagId = _ref.sourceTagId;
+const relationType = _ref.relationType;
+const onClose = _ref.onClose;
+const onAdd = _ref.onAdd;
 
 
-var _useState = useState('');
-var search = _useState[0];
-var setSearch = _useState[1];
+const _useState = useState('');
+const search = _useState[0];
+const setSearch = _useState[1];
 
-var _useState2 = useState([]);
-var results = _useState2[0];
-var setResults = _useState2[1];
+const _useState2 = useState([]);
+const results = _useState2[0];
+const setResults = _useState2[1];
 
-var _useState3 = useState(false);
-var loading = _useState3[0];
-var setLoading = _useState3[1];
+const _useState3 = useState(false);
+const loading = _useState3[0];
+const setLoading = _useState3[1];
 
-var _useState4 = useState(0);
-var selectedIndex = _useState4[0];
-var setSelectedIndex = _useState4[1];
+const _useState4 = useState(0);
+const selectedIndex = _useState4[0];
+const setSelectedIndex = _useState4[1];
 
-var inputRef = useRef(null);
+const inputRef = useRef(null);
 
 useEffect(function () {
   if (inputRef.current) {
@@ -206,7 +231,7 @@ useEffect(function () {
 
 useEffect(
   function () {
-    var debounce = setTimeout(function () {
+    const debounce = setTimeout(function () {
       if (search.trim().length >= 2) {
         doSearch();
       } else {
@@ -221,7 +246,7 @@ useEffect(
   [search]
 );
 
-var doSearch = function () {
+const doSearch = function () {
   setLoading(true);
 
   runPluginOperation('find_tags', {
@@ -229,22 +254,27 @@ var doSearch = function () {
     per_page: 20
   })
     .then(function (data) {
-      var filtered = data.filter(function (tag) {
-        return tag.id !== sourceTagId;
-      });
+      const filtered = data.filter(
+        function (tag) {
+          return tag.id !== sourceTagId;
+        }
+      );
 
       setResults(filtered);
       setSelectedIndex(0);
     })
     .catch(function (error) {
-      logError('Search failed:', error);
+      logError(
+        'Search failed:',
+        error
+      );
     })
     .finally(function () {
       setLoading(false);
     });
 };
 
-var handleKeyDown = function (e) {
+const handleKeyDown = function (e) {
   if (e.key === 'Escape') {
     onClose();
     return;
@@ -256,7 +286,10 @@ var handleKeyDown = function (e) {
     setSelectedIndex(function (prev) {
       return Math.min(
         prev + 1,
-        Math.max(results.length - 1, 0)
+        Math.max(
+          results.length - 1,
+          0
+        )
       );
     });
 
@@ -267,7 +300,10 @@ var handleKeyDown = function (e) {
     e.preventDefault();
 
     setSelectedIndex(function (prev) {
-      return Math.max(prev - 1, 0);
+      return Math.max(
+        prev - 1,
+        0
+      );
     });
 
     return;
@@ -285,7 +321,7 @@ var handleKeyDown = function (e) {
   }
 };
 
-var title =
+const title =
   relationType.charAt(0).toUpperCase() +
   relationType.slice(1);
 
@@ -295,6 +331,7 @@ return createElement(
     className: 'modal-overlay',
     onClick: onClose
   },
+
   createElement(
     'div',
     {
@@ -303,16 +340,19 @@ return createElement(
         e.stopPropagation();
       }
     },
+
     createElement(
       'div',
       {
         className: 'modal-header'
       },
+
       createElement(
         'h3',
         null,
         'Add ' + title + ' Tag'
       ),
+
       createElement(
         'button',
         {
@@ -323,18 +363,22 @@ return createElement(
         '×'
       )
     ),
+
     createElement(
       'div',
       {
         className: 'modal-body'
       },
+
       createElement('input', {
         ref: inputRef,
         type: 'text',
         value: search,
+
         onChange: function (e) {
           setSearch(e.target.value);
         },
+
         onKeyDown: handleKeyDown,
         placeholder: 'Search tags...',
         className: 'modal-search-input'
@@ -354,22 +398,29 @@ return createElement(
         {
           className: 'modal-results'
         },
-        results.map(function (tag, index) {
+
+        results.map(function (
+          tag,
+          index
+        ) {
           return createElement(
             'li',
             {
               key: tag.id,
+
               className:
                 'modal-result-item' +
                 (index === selectedIndex
                   ? ' selected'
                   : ''),
+
               onClick: function () {
                 onAdd(
                   tag.id,
                   relationType
                 );
               },
+
               onMouseEnter: function () {
                 setSelectedIndex(index);
               }
@@ -384,7 +435,8 @@ return createElement(
           createElement(
             'li',
             {
-              className: 'modal-no-results'
+              className:
+                'modal-no-results'
             },
             'No tags found'
           )
@@ -396,11 +448,13 @@ return createElement(
       {
         className: 'modal-footer'
       },
+
       createElement(
         'button',
         {
           type: 'button',
-          className: 'btn btn-secondary',
+          className:
+            'btn btn-secondary',
           onClick: onClose
         },
         'Cancel'
@@ -408,6 +462,7 @@ return createElement(
     )
   )
 );
+
 
 }
 
@@ -419,46 +474,56 @@ return createElement(
   */
 
 function RelatedTagsPanel(_ref) {
-var tagId = _ref.tagId;
+const tagId = _ref.tagId;
 
 
-var _useState5 = useState([]);
-var similar = _useState5[0];
-var setSimilar = _useState5[1];
+const _useState5 = useState([]);
+const similar = _useState5[0];
+const setSimilar = _useState5[1];
 
-var _useState6 = useState([]);
-var related = _useState6[0];
-var setRelated = _useState6[1];
+const _useState6 = useState([]);
+const related = _useState6[0];
+const setRelated = _useState6[1];
 
-var _useState7 = useState(false);
-var loading = _useState7[0];
-var setLoading = _useState7[1];
+const _useState7 = useState(false);
+const loading = _useState7[0];
+const setLoading = _useState7[1];
 
-var _useState8 = useState(false);
-var showAddModal = _useState8[0];
-var setShowAddModal = _useState8[1];
+const _useState8 = useState(false);
+const showAddModal = _useState8[0];
+const setShowAddModal =
+  _useState8[1];
 
-var _useState9 = useState('similar');
-var modalType = _useState9[0];
-var setModalType = _useState9[1];
+const _useState9 = useState('similar');
+const modalType = _useState9[0];
+const setModalType =
+  _useState9[1];
 
-var numericTagId = tagId
+const numericTagId = tagId
   ? parseInt(tagId, 10)
   : null;
 
-var loadRelations = function () {
+const loadRelations = function () {
   if (!numericTagId) {
     return;
   }
 
   setLoading(true);
 
-  runPluginOperation('list_relations', {
-    tag_id: numericTagId
-  })
+  runPluginOperation(
+    'list_relations',
+    {
+      tag_id: numericTagId
+    }
+  )
     .then(function (data) {
-      setSimilar(data.similar || []);
-      setRelated(data.related || []);
+      setSimilar(
+        data.similar || []
+      );
+
+      setRelated(
+        data.related || []
+      );
     })
     .catch(function (error) {
       logError(
@@ -480,53 +545,68 @@ useEffect(
   [numericTagId]
 );
 
-var handleAddRelation = function (
-  targetTagId,
-  type
-) {
-  if (!numericTagId) {
-    return;
-  }
+const handleAddRelation =
+  function (
+    targetTagId,
+    type
+  ) {
+    if (!numericTagId) {
+      return;
+    }
 
-  runPluginOperation('create_relation', {
-    tag_a_id: numericTagId,
-    tag_b_id: targetTagId,
-    relation_type: type
-  })
-    .then(function () {
-      loadRelations();
-      setShowAddModal(false);
-    })
-    .catch(function (error) {
-      logError(
-        'Failed to add relation:',
-        error
-      );
+    runPluginOperation(
+      'create_relation',
+      {
+        tag_a_id: numericTagId,
+        tag_b_id: targetTagId,
+        relation_type: type
+      }
+    )
+      .then(function () {
+        loadRelations();
+        setShowAddModal(false);
+      })
+      .catch(function (error) {
+        logError(
+          'Failed to add relation:',
+          error
+        );
 
-      window.alert(
-        'Failed to add relation'
-      );
-    });
-};
-
-var handleDelete = function (
-  deletedTagId,
-  type
-) {
-  if (type === 'similar') {
-    setSimilar(function (prev) {
-      return prev.filter(function (tag) {
-        return tag.id !== deletedTagId;
+        window.alert(
+          'Failed to add relation'
+        );
       });
-    });
-  } else {
-    setRelated(function (prev) {
-      return prev.filter(function (tag) {
-        return tag.id !== deletedTagId;
+  };
+
+const handleDelete =
+  function (
+    deletedTagId,
+    type
+  ) {
+    if (type === 'similar') {
+      setSimilar(function (prev) {
+        return prev.filter(
+          function (tag) {
+            return (
+              tag.id !==
+              deletedTagId
+            );
+          }
+        );
       });
-    });
-  }
-};
+    } else {
+      setRelated(function (prev) {
+        return prev.filter(
+          function (tag) {
+            return (
+              tag.id !==
+              deletedTagId
+            );
+          }
+        );
+      });
+    }
+  };
 
 if (!numericTagId) {
   return null;
@@ -535,7 +615,8 @@ if (!numericTagId) {
 return createElement(
   'div',
   {
-    className: 'related-tags-panel'
+    className:
+      'related-tags-panel'
   },
 
   createElement(
@@ -544,19 +625,20 @@ return createElement(
     'Related Tags'
   ),
 
-  /*
-   * Similar
-   */
   createElement(
     'div',
     {
-      className: 'relation-section'
+      className:
+        'relation-section'
     },
+
     createElement(
       'div',
       {
-        className: 'section-header'
+        className:
+          'section-header'
       },
+
       createElement(
         'span',
         {
@@ -565,15 +647,22 @@ return createElement(
         },
         'Similar'
       ),
+
       createElement(
         'button',
         {
           type: 'button',
           className:
             'add-relation-btn',
+
           onClick: function () {
-            setModalType('similar');
-            setShowAddModal(true);
+            setModalType(
+              'similar'
+            );
+
+            setShowAddModal(
+              true
+            );
           }
         },
         '+ Add'
@@ -592,48 +681,58 @@ return createElement(
       ? createElement(
           'div',
           {
-            className: 'empty-state'
+            className:
+              'empty-state'
           },
           'No similar tags'
         )
       : createElement(
           'div',
           {
-            className: 'relation-list'
+            className:
+              'relation-list'
           },
-          similar.map(function (tag) {
-            return createElement(
-              RelationRow,
-              {
-                key: tag.id,
-                tag: tag,
-                relationType: 'similar',
-                sourceTagId: numericTagId,
-                onDelete: function () {
-                  handleDelete(
-                    tag.id,
-                    'similar'
-                  );
+
+          similar.map(
+            function (tag) {
+              return createElement(
+                RelationRow,
+                {
+                  key: tag.id,
+                  tag: tag,
+                  relationType:
+                    'similar',
+                  sourceTagId:
+                    numericTagId,
+
+                  onDelete:
+                    function () {
+                      handleDelete(
+                        tag.id,
+                        'similar'
+                      );
+                    }
                 }
-              }
-            );
-          })
+              );
+            }
+          )
         )
   ),
 
-  /*
-   * Related
-   */
   createElement(
     'div',
     {
-      className: 'relation-section'
+      className:
+        'relation-section'
     },
+
     createElement(
       'div',
       {
-        className: 'section-header'
+        className:
+          'section-header'
       },
+
       createElement(
         'span',
         {
@@ -642,15 +741,22 @@ return createElement(
         },
         'Related'
       ),
+
       createElement(
         'button',
         {
           type: 'button',
           className:
             'add-relation-btn',
+
           onClick: function () {
-            setModalType('related');
-            setShowAddModal(true);
+            setModalType(
+              'related'
+            );
+
+            setShowAddModal(
+              true
+            );
           }
         },
         '+ Add'
@@ -669,47 +775,64 @@ return createElement(
       ? createElement(
           'div',
           {
-            className: 'empty-state'
+            className:
+              'empty-state'
           },
           'No related tags'
         )
       : createElement(
           'div',
           {
-            className: 'relation-list'
+            className:
+              'relation-list'
           },
-          related.map(function (tag) {
-            return createElement(
-              RelationRow,
-              {
-                key: tag.id,
-                tag: tag,
-                relationType: 'related',
-                sourceTagId: numericTagId,
-                onDelete: function () {
-                  handleDelete(
-                    tag.id,
-                    'related'
-                  );
+
+          related.map(
+            function (tag) {
+              return createElement(
+                RelationRow,
+                {
+                  key: tag.id,
+                  tag: tag,
+                  relationType:
+                    'related',
+                  sourceTagId:
+                    numericTagId,
+
+                  onDelete:
+                    function () {
+                      handleDelete(
+                        tag.id,
+                        'related'
+                      );
+                    }
                 }
-              }
-            );
-          })
+              );
+            }
+          )
         )
   ),
 
-  /*
-   * Add relation modal
-   */
   showAddModal &&
-    createElement(AddRelationModal, {
-      sourceTagId: numericTagId,
-      relationType: modalType,
-      onClose: function () {
-        setShowAddModal(false);
-      },
-      onAdd: handleAddRelation
-    })
+    createElement(
+      AddRelationModal,
+      {
+        sourceTagId:
+          numericTagId,
+        relationType:
+          modalType,
+
+        onClose:
+          function () {
+            setShowAddModal(
+              false
+            );
+          },
+
+        onAdd:
+          handleAddRelation
+      }
+    )
 );
 
 
@@ -723,102 +846,166 @@ return createElement(
   */
 
 function TagRelationsPage() {
-var _useState10 = useState([]);
-var relations = _useState10[0];
-var setRelations = _useState10[1];
+const _useState10 =
+useState([]);
 
 
-var _useState11 = useState([]);
-var filteredRelations = _useState11[0];
-var setFilteredRelations = _useState11[1];
+const relations =
+  _useState10[0];
 
-var _useState12 = useState('');
-var search = _useState12[0];
-var setSearch = _useState12[1];
+const setRelations =
+  _useState10[1];
 
-var _useState13 = useState('all');
-var filter = _useState13[0];
-var setFilter = _useState13[1];
+const _useState11 =
+  useState([]);
 
-var _useState14 = useState(false);
-var loading = _useState14[0];
-var setLoading = _useState14[1];
+const filteredRelations =
+  _useState11[0];
 
-var _useState15 = useState({
-  total_relations: 0,
-  similar_count: 0,
-  related_count: 0,
-  tags_with_relations: 0
-});
+const setFilteredRelations =
+  _useState11[1];
 
-var stats = _useState15[0];
-var setStats = _useState15[1];
+const _useState12 =
+  useState('');
 
-var _useState16 = useState(false);
-var showExport = _useState16[0];
-var setShowExport = _useState16[1];
+const search =
+  _useState12[0];
 
-var _useState17 = useState('');
-var exportData = _useState17[0];
-var setExportData = _useState17[1];
+const setSearch =
+  _useState12[1];
 
-var applyFilters = function (rels) {
-  var filtered = rels;
+const _useState13 =
+  useState('all');
 
-  if (filter !== 'all') {
-    filtered = filtered.filter(function (r) {
-      return r.type === filter;
-    });
-  }
+const filter =
+  _useState13[0];
 
-  if (search.trim()) {
-    var term = search.toLowerCase();
+const setFilter =
+  _useState13[1];
 
-    filtered = filtered.filter(function (r) {
-      return (
-        r.tag_a.name
-          .toLowerCase()
-          .includes(term) ||
-        r.tag_b.name
-          .toLowerCase()
-          .includes(term)
-      );
-    });
-  }
+const _useState14 =
+  useState(false);
 
-  setFilteredRelations(filtered);
-};
+const loading =
+  _useState14[0];
 
-var loadAll = function () {
+const setLoading =
+  _useState14[1];
+
+const _useState15 =
+  useState({
+    total_relations: 0,
+    similar_count: 0,
+    related_count: 0,
+    tags_with_relations: 0
+  });
+
+const stats =
+  _useState15[0];
+
+const setStats =
+  _useState15[1];
+
+const _useState16 =
+  useState(false);
+
+const showExport =
+  _useState16[0];
+
+const setShowExport =
+  _useState16[1];
+
+const _useState17 =
+  useState('');
+
+const exportData =
+  _useState17[0];
+
+const setExportData =
+  _useState17[1];
+
+const applyFilters =
+  function (rels) {
+    let filtered = rels;
+
+    if (filter !== 'all') {
+      filtered =
+        filtered.filter(
+          function (r) {
+            return (
+              r.type ===
+              filter
+            );
+          }
+        );
+    }
+
+    if (search.trim()) {
+      const term =
+        search.toLowerCase();
+
+      filtered =
+        filtered.filter(
+          function (r) {
+            return (
+              r.tag_a.name
+                .toLowerCase()
+                .includes(term) ||
+              r.tag_b.name
+                .toLowerCase()
+                .includes(term)
+            );
+          }
+        );
+    }
+
+    setFilteredRelations(
+      filtered
+    );
+  };
+
+const loadAll = function () {
   setLoading(true);
 
   Promise.all([
     runPluginOperation(
       'export_relations'
     ),
-    runPluginOperation('get_stats')
+    runPluginOperation(
+      'get_stats'
+    )
   ])
-    .then(function (_ref4) {
-      var relsResult = _ref4[0];
-      var statsResult = _ref4[1];
+    .then(function (
+      _ref4
+    ) {
+      const relsResult =
+        _ref4[0];
+
+      const statsResult =
+        _ref4[1];
 
       if (
         relsResult &&
         relsResult.relations
       ) {
-        var rels =
+        const rels =
           relsResult.relations.map(
             function (r) {
               return {
                 tag_a: {
-                  id: r.tag_a_id,
+                  id:
+                    r.tag_a_id,
                   name: ''
                 },
+
                 tag_b: {
-                  id: r.tag_b_id,
+                  id:
+                    r.tag_b_id,
                   name: ''
                 },
-                type: r.relation_type
+
+                type:
+                  r.relation_type
               };
             }
           );
@@ -828,10 +1015,14 @@ var loadAll = function () {
       }
 
       if (statsResult) {
-        setStats(statsResult);
+        setStats(
+          statsResult
+        );
       }
     })
-    .catch(function (error) {
+    .catch(function (
+      error
+    ) {
       logError(
         'Failed to load:',
         error
@@ -850,60 +1041,94 @@ useEffect(
   function () {
     applyFilters(relations);
   },
-  [search, filter, relations]
+  [
+    search,
+    filter,
+    relations
+  ]
 );
 
-var handleExport = function () {
-  runPluginOperation(
-    'export_relations'
-  )
-    .then(function (data) {
-      if (data) {
-        setExportData(
-          JSON.stringify(
-            data,
-            null,
-            2
-          )
-        );
-        setShowExport(true);
-      }
-    })
-    .catch(function (error) {
-      logError(
-        'Export failed:',
-        error
-      );
-    });
-};
-
-var handleImport = function (file) {
-  var reader = new FileReader();
-
-  reader.onload = function (e) {
-    try {
-      var data = JSON.parse(
-        e.target.result
-      );
-
-      runPluginOperation(
-        'import_relations',
-        {
-          relations:
-            data.relations || [],
-          overwrite: false
-        }
-      )
-        .then(function (result) {
-          window.alert(
-            'Imported ' +
-              result.imported_count +
-              ' relations'
+const handleExport =
+  function () {
+    runPluginOperation(
+      'export_relations'
+    )
+      .then(function (data) {
+        if (data) {
+          setExportData(
+            JSON.stringify(
+              data,
+              null,
+              2
+            )
           );
 
-          loadAll();
-        })
-        .catch(function (error) {
+          setShowExport(
+            true
+          );
+        }
+      })
+      .catch(function (
+        error
+      ) {
+        logError(
+          'Export failed:',
+          error
+        );
+      });
+  };
+
+const handleImport =
+  function (file) {
+    const reader =
+      new FileReader();
+
+    reader.onload =
+      function (e) {
+        try {
+          const data =
+            JSON.parse(
+              e.target.result
+            );
+
+          runPluginOperation(
+            'import_relations',
+            {
+              relations:
+                data.relations ||
+                [],
+              overwrite:
+                false
+            }
+          )
+            .then(
+              function (
+                result
+              ) {
+                window.alert(
+                  'Imported ' +
+                    result.imported_count +
+                    ' relations'
+                );
+
+                loadAll();
+              }
+            )
+            .catch(
+              function (
+                error
+              ) {
+                logError(
+                  'Import failed:',
+                  error
+                );
+
+                window.alert(
+                  'Import failed'
+                );
+              }
+            );
+        } catch (error) {
           logError(
             'Import failed:',
             error
@@ -912,72 +1137,78 @@ var handleImport = function (file) {
           window.alert(
             'Import failed'
           );
-        });
-    } catch (error) {
-      logError(
-        'Import failed:',
-        error
-      );
+        }
+      };
 
-      window.alert(
-        'Import failed'
-      );
-    }
+    reader.readAsText(
+      file
+    );
   };
 
-  reader.readAsText(file);
-};
-
-var handleValidate = function () {
-  runPluginOperation(
-    'validate_relations'
-  )
-    .then(function (data) {
-      if (!data) {
-        return;
-      }
-
-      window.alert(
-        'Valid: ' +
-          data.valid_count +
-          '\nBroken: ' +
-          data.broken_count
-      );
-
-      if (data.broken_count > 0) {
-        if (
-          window.confirm(
-            'Remove broken relations?'
-          )
-        ) {
-          runPluginOperation(
-            'remove_broken_relations'
-          )
-            .then(function (result) {
-              window.alert(
-                'Removed ' +
-                  result.removed_count +
-                  ' broken relations'
-              );
-
-              loadAll();
-            })
-            .catch(function (error) {
-              logError(
-                'Failed to remove broken relations:',
-                error
-              );
-            });
+const handleValidate =
+  function () {
+    runPluginOperation(
+      'validate_relations'
+    )
+      .then(function (data) {
+        if (!data) {
+          return;
         }
-      }
-    })
-    .catch(function (error) {
-      logError(
-        'Validate failed:',
+
+        window.alert(
+          'Valid: ' +
+            data.valid_count +
+            '\nBroken: ' +
+            data.broken_count
+        );
+
+        if (
+          data.broken_count >
+          0
+        ) {
+          if (
+            window.confirm(
+              'Remove broken relations?'
+            )
+          ) {
+            runPluginOperation(
+              'remove_broken_relations'
+            )
+              .then(
+                function (
+                  result
+                ) {
+                  window.alert(
+                    'Removed ' +
+                      result.removed_count +
+                      ' broken relations'
+                  );
+
+                  loadAll();
+                }
+              )
+              .catch(
+                function (
+                  error
+                ) {
+                  logError(
+                    'Failed to remove broken relations:',
+                    error
+                  );
+                }
+              );
+          }
+        }
+      })
+      .catch(function (
         error
-      );
-    });
-};
+      ) {
+        logError(
+          'Validate failed:',
+          error
+        );
+      });
+  };
 
 return createElement(
   'div',
@@ -989,8 +1220,10 @@ return createElement(
   createElement(
     'div',
     {
-      className: 'page-header'
+      className:
+        'page-header'
     },
+
     createElement(
       'h2',
       null,
@@ -1000,7 +1233,8 @@ return createElement(
     createElement(
       'div',
       {
-        className: 'page-actions'
+        className:
+          'page-actions'
       },
 
       createElement(
@@ -1009,34 +1243,50 @@ return createElement(
           type: 'button',
           className:
             'btn btn-primary',
-          onClick: handleExport
+          onClick:
+            handleExport
         },
         'Export JSON'
       ),
 
-      createElement('input', {
-        type: 'file',
-        accept: '.json',
-        onChange: function (e) {
-          var file =
-            e.target.files &&
-            e.target.files[0];
+      createElement(
+        'input',
+        {
+          type: 'file',
+          accept: '.json',
 
-          if (file) {
-            handleImport(file);
+          onChange:
+            function (e) {
+              const file =
+                e.target.files &&
+                e.target.files[0];
+
+              if (file) {
+                handleImport(
+                  file
+                );
+              }
+            },
+
+          className:
+            'file-input',
+
+          id:
+            'import-file',
+
+          style: {
+            display:
+              'none'
           }
-        },
-        className: 'file-input',
-        id: 'import-file',
-        style: {
-          display: 'none'
         }
-      }),
+      ),
 
       createElement(
         'label',
         {
-          htmlFor: 'import-file',
+          htmlFor:
+            'import-file',
+
           className:
             'btn btn-secondary'
         },
@@ -1049,7 +1299,8 @@ return createElement(
           type: 'button',
           className:
             'btn btn-secondary',
-          onClick: handleValidate
+          onClick:
+            handleValidate
         },
         'Validate'
       )
@@ -1059,8 +1310,10 @@ return createElement(
   createElement(
     'div',
     {
-      className: 'stats-bar'
+      className:
+        'stats-bar'
     },
+
     createElement(
       'div',
       {
@@ -1069,6 +1322,7 @@ return createElement(
       'Total: ' +
         stats.total_relations
     ),
+
     createElement(
       'div',
       {
@@ -1078,6 +1332,7 @@ return createElement(
       'Similar: ' +
         stats.similar_count
     ),
+
     createElement(
       'div',
       {
@@ -1087,6 +1342,7 @@ return createElement(
       'Related: ' +
         stats.related_count
     ),
+
     createElement(
       'div',
       {
@@ -1100,31 +1356,47 @@ return createElement(
   createElement(
     'div',
     {
-      className: 'filters'
+      className:
+        'filters'
     },
 
-    createElement('input', {
-      type: 'text',
-      value: search,
-      onChange: function (e) {
-        setSearch(e.target.value);
-      },
-      placeholder:
-        'Search tags...',
-      className:
-        'search-input'
-    }),
+    createElement(
+      'input',
+      {
+        type: 'text',
+        value: search,
+
+        onChange:
+          function (e) {
+            setSearch(
+              e.target.value
+            );
+          },
+
+        placeholder:
+          'Search tags...',
+
+        className:
+          'search-input'
+      }
+    ),
 
     createElement(
       'select',
       {
         value: filter,
-        onChange: function (e) {
-          setFilter(e.target.value);
-        },
+
+        onChange:
+          function (e) {
+            setFilter(
+              e.target.value
+            );
+          },
+
         className:
           'filter-select'
       },
+
       createElement(
         'option',
         {
@@ -1132,6 +1404,7 @@ return createElement(
         },
         'All'
       ),
+
       createElement(
         'option',
         {
@@ -1139,6 +1412,7 @@ return createElement(
         },
         'Similar'
       ),
+
       createElement(
         'option',
         {
@@ -1153,11 +1427,15 @@ return createElement(
     ? createElement(
         'div',
         {
-          className: 'loading'
+          className:
+            'loading'
         },
         'Loading relations...'
       )
-    : filteredRelations.length === 0
+
+    : filteredRelations.length ===
+      0
+
     ? createElement(
         'div',
         {
@@ -1166,28 +1444,36 @@ return createElement(
         },
         'No relations found'
       )
+
     : createElement(
         'div',
         {
           className:
             'relations-grid'
         },
+
         filteredRelations.map(
-          function (rel, index) {
+          function (
+            rel,
+            index
+          ) {
             return createElement(
               'div',
               {
                 key: index,
+
                 className:
                   'relation-card ' +
                   rel.type
               },
+
               createElement(
                 'div',
                 {
                   className:
                     'relation-pair'
                 },
+
                 createElement(
                   'span',
                   {
@@ -1199,6 +1485,7 @@ return createElement(
                     'Tag #' +
                       rel.tag_a.id
                 ),
+
                 createElement(
                   'span',
                   {
@@ -1207,10 +1494,11 @@ return createElement(
                       rel.type
                   },
                   rel.type ===
-                  'similar'
+                    'similar'
                     ? '≈'
                     : '∼'
                 ),
+
                 createElement(
                   'span',
                   {
@@ -1223,6 +1511,7 @@ return createElement(
                       rel.tag_b.id
                 )
               ),
+
               createElement(
                 'span',
                 {
@@ -1243,39 +1532,54 @@ return createElement(
       {
         className:
           'modal-overlay',
-        onClick: function () {
-          setShowExport(false);
-        }
+
+        onClick:
+          function () {
+            setShowExport(
+              false
+            );
+          }
       },
+
       createElement(
         'div',
         {
           className:
             'modal modal-large',
-          onClick: function (e) {
-            e.stopPropagation();
-          }
+
+          onClick:
+            function (e) {
+              e.stopPropagation();
+            }
         },
+
         createElement(
           'div',
           {
             className:
               'modal-header'
           },
+
           createElement(
             'h3',
             null,
             'Export Relations (JSON)'
           ),
+
           createElement(
             'button',
             {
               type: 'button',
+
               className:
                 'modal-close',
-              onClick: function () {
-                setShowExport(false);
-              }
+
+              onClick:
+                function () {
+                  setShowExport(
+                    false
+                  );
+                }
             },
             '×'
           )
@@ -1287,18 +1591,21 @@ return createElement(
             className:
               'modal-body'
           },
+
           createElement(
             'textarea',
             {
-              value: exportData,
+              value:
+                exportData,
               readOnly: true,
+
               className:
                 'export-textarea',
-              onClick: function (
-                e
-              ) {
-                e.target.select();
-              }
+
+              onClick:
+                function (e) {
+                  e.target.select();
+                }
             }
           ),
 
@@ -1306,8 +1613,10 @@ return createElement(
             'button',
             {
               type: 'button',
+
               className:
                 'btn btn-primary',
+
               onClick:
                 function () {
                   navigator.clipboard.writeText(
@@ -1337,316 +1646,317 @@ window.PluginApi.register.route(
 TagRelationsPage
 );
 
+log(
+'Standalone route registered'
+);
 
 /*
- * ============================================================
- * TagEditPanel integration
- * ============================================================
- *
- * TagEditPanel itself is not a PatchComponent.
- *
- * TagPage IS patchable.
- *
- * PluginApi.patch.after() gives us:
- *
- *   (props, renderedResult)
- *
- * renderedResult is the actual React element tree returned by
- * TagPage, so we can walk that tree and replace the
- * TagEditPanel element with our own wrapper.
- */
+
+* ============================================================
+* TagEditPanel integration
+* ============================================================
+*
+* TagEditPanel itself is not a PatchComponent.
+*
+* TagPage IS patchable.
+*
+* PluginApi.patch.after() gives us:
+*
+* (props, renderedResult)
+*
+* renderedResult is the actual React element tree returned by
+* TagPage, so we walk that tree and replace TagEditPanel.
+  */
 
 function getComponentName(type) {
-  if (!type) {
-    return '';
-  }
-
-  return (
-    type.displayName ||
-    type.name ||
-    ''
-  );
+if (!type) {
+return '';
 }
 
 
-function isTagEditPanelElement(element) {
-  if (!React.isValidElement(element)) {
-    return false;
-  }
+return (
+  type.displayName ||
+  type.name ||
+  ''
+);
 
-  var name = getComponentName(
+
+}
+
+function isTagEditPanelElement(
+element
+) {
+if (
+!React.isValidElement(element)
+) {
+return false;
+}
+
+
+const name =
+  getComponentName(
     element.type
   );
 
-  /*
-   * Primary check.
-   */
-  if (
-    name === 'TagEditPanel' ||
-    name === 'PatchedTagEditPanel'
-  ) {
-    return true;
-  }
-
-  /*
-   * Fallback check.
-   *
-   * This protects us if the production bundle changes the
-   * function name.
-   */
-  var props = element.props;
-
-  if (!props) {
-    return false;
-  }
-
-  return (
-    props.tag &&
-    props.onSubmit &&
-    props.onCancel &&
-    props.onDelete &&
-    props.setImage &&
-    props.setEncodingImage
-  );
+/*
+ * Primary check.
+ */
+if (
+  name === 'TagEditPanel' ||
+  name ===
+    'PatchedTagEditPanel'
+) {
+  return true;
 }
 
+/*
+ * Fallback check.
+ */
+const props =
+  element.props;
 
-function TagEditPanelWithRelations(_ref) {
-  var originalElement = _ref.originalElement;
-  var tag = _ref.tag;
+if (!props) {
+  return false;
+}
 
-  var _useState18 = useState(false);
+return (
+  props.tag &&
+  props.onSubmit &&
+  props.onCancel &&
+  props.onDelete &&
+  props.setImage &&
+  props.setEncodingImage
+);
 
-  var showRelations =
-    _useState18[0];
 
-  var setShowRelations =
-    _useState18[1];
+}
+
+function TagEditPanelWithRelations(
+_ref
+) {
+const originalElement =
+_ref.originalElement;
 
 
-  var tagId = tag && tag.id;
+const tag =
+  _ref.tag;
 
+const _useState18 =
+  useState(false);
+
+const showRelations =
+  _useState18[0];
+
+const setShowRelations =
+  _useState18[1];
+
+const tagId =
+  tag && tag.id;
+
+/*
+ * New tags do not have an ID yet.
+ */
+if (!tagId) {
+  return originalElement;
+}
+
+const toggleRelations =
+  function () {
+    setShowRelations(
+      function (value) {
+        return !value;
+      }
+    );
+  };
+
+return createElement(
+  Fragment,
+  null,
 
   /*
-   * New tags do not have an ID yet.
-   *
-   * In that case simply render the original edit panel.
+   * Original TagEditPanel.
    */
-  if (!tagId) {
-    return originalElement;
-  }
+  originalElement,
 
+  /*
+   * Relations controls.
+   */
+  createElement(
+    'div',
+    {
+      className:
+        'tag-relations-edit-controls'
+    },
 
-  var toggleRelations =
-    function () {
-      setShowRelations(
-        function (value) {
-          return !value;
-        }
-      );
-    };
+    createElement(
+      'button',
+      {
+        type: 'button',
 
+        className:
+          'btn btn-secondary ' +
+          'tag-relations-edit-button',
 
-  return createElement(
-    Fragment,
-    null,
+        onClick:
+          toggleRelations
+      },
 
-    /*
-     * Original Stash TagEditPanel.
-     */
-    originalElement,
+      showRelations
+        ? 'Hide Tag Relations'
+        : 'Tag Relations'
+    )
+  ),
 
-
-    /*
-     * Tag Relations button.
-     */
+  /*
+   * Relations panel.
+   */
+  showRelations &&
     createElement(
       'div',
       {
         className:
-          'tag-relations-edit-controls'
+          'tag-relations-edit-panel-wrapper'
       },
 
       createElement(
-        'button',
+        RelatedTagsPanel,
         {
-          type: 'button',
-
-          className:
-            'btn btn-secondary tag-relations-edit-button',
-
-          onClick:
-            toggleRelations
-        },
-
-        showRelations
-          ? 'Hide Tag Relations'
-          : 'Tag Relations'
+          tagId:
+            String(tagId)
+        }
       )
-    ),
+    )
+);
 
 
-    /*
-     * Relations panel.
-     */
-    showRelations &&
-      createElement(
-        'div',
-        {
-          className:
-            'tag-relations-edit-panel-wrapper'
-        },
-
-        createElement(
-          RelatedTagsPanel,
-          {
-            tagId: String(tagId)
-          }
-        )
-      )
-  );
 }
-
 
 function patchTagEditPanelTree(
-  element
+element
 ) {
-  /*
-   * Not a React element.
-   */
-  if (!React.isValidElement(element)) {
-    return element;
-  }
-
-
-  /*
-   * We found TagEditPanel.
-   */
-  if (
-    isTagEditPanelElement(element)
-  ) {
-    log(
-      'Found TagEditPanel in TagPage tree'
-    );
-
-    return createElement(
-      TagEditPanelWithRelations,
-      {
-        key: element.key,
-
-        tag:
-          element.props &&
-          element.props.tag,
-
-        originalElement:
-          element
-      }
-    );
-  }
-
-
-  /*
-   * Nothing to traverse.
-   */
-  if (
-    !element.props ||
-    element.props.children == null
-  ) {
-    return element;
-  }
-
-
-  /*
-   * Recursively process children.
-   */
-  var children =
-    React.Children.map(
-      element.props.children,
-      function (child) {
-        return patchTagEditPanelTree(
-          child
-        );
-      }
-    );
-
-
-  /*
-   * Recreate the element while preserving
-   * all of its original props.
-   */
-  return React.cloneElement(
-    element,
-    undefined,
-    children
-  );
+if (
+!React.isValidElement(element)
+) {
+return element;
 }
 
 
-try {
-  window.PluginApi.patch.after(
-    'TagPage',
+/*
+ * TagEditPanel found.
+ */
+if (
+  isTagEditPanelElement(
+    element
+  )
+) {
+  log(
+    'Found TagEditPanel in TagPage tree'
+  );
 
-    function (
-      props,
-      renderedResult
-    ) {
-      log(
-        'TagPage after patch called'
+  return createElement(
+    TagEditPanelWithRelations,
+    {
+      key: element.key,
+
+      tag:
+        element.props &&
+        element.props.tag,
+
+      originalElement:
+        element
+    }
+  );
+}
+
+/*
+ * No children.
+ */
+if (
+  !element.props ||
+  element.props.children == null
+) {
+  return element;
+}
+
+/*
+ * Walk children recursively.
+ */
+const children =
+  React.Children.map(
+    element.props.children,
+    function (child) {
+      return patchTagEditPanelTree(
+        child
       );
-
-
-      /*
-       * TagPage did not return anything.
-       */
-      if (!renderedResult) {
-        log(
-          'TagPage renderedResult is empty'
-        );
-
-        return renderedResult;
-      }
-
-
-      var tag =
-        props &&
-        props.tag;
-
-      var tagId =
-        tag &&
-        tag.id;
-
-
-      log(
-        'TagPage after:',
-        'tagId=' + tagId
-      );
-
-
-      /*
-       * Walk the ACTUAL rendered React tree.
-       */
-      var patchedResult =
-        patchTagEditPanelTree(
-          renderedResult
-        );
-
-
-      return patchedResult;
     }
   );
 
+/*
+ * Preserve all original props.
+ */
+return React.cloneElement(
+  element,
+  undefined,
+  children
+);
 
-  log(
-    'TagPage after patch registered'
-  );
 
-} catch (error) {
-  logError(
-    'Failed to register TagPage after patch:',
-    error
-  );
 }
 
+try {
+window.PluginApi.patch.after(
+'TagPage',
+
+
+  function (
+    props,
+    renderedResult
+  ) {
+    log(
+      'TagPage after patch called'
+    );
+
+    if (!renderedResult) {
+      log(
+        'TagPage renderedResult is empty'
+      );
+
+      return renderedResult;
+    }
+
+    const tag =
+      props &&
+      props.tag;
+
+    const tagId =
+      tag &&
+      tag.id;
+
+    log(
+      'TagPage after:',
+      'tagId=' + tagId
+    );
+
+    const patchedResult =
+      patchTagEditPanelTree(
+        renderedResult
+      );
+
+    return patchedResult;
+  }
+);
+
+log(
+  'TagPage after patch registered'
+);
+
+
+} catch (error) {
+logError(
+'Failed to register TagPage after patch:',
+error
+);
+}
 
 log('loaded');
 })();

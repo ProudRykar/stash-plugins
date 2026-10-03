@@ -1,19 +1,7 @@
 name: Tag Relations
 description: Manage relationships between Stash tags (similar/related)
-version: 0.1.5
+version: 0.1.6
 url: https://github.com/ProudRykar/stash-plugins
-
-interface: raw
-
-exec:
-  - python
-  - "{pluginDir}/backend/main.py"
-
-ui:
-  javascript:
-    - index.js
-  css:
-    - styles.css
 
 settings:
   database_path:
@@ -21,10 +9,23 @@ settings:
     type: STRING
     default: ""
 
+ui:
+  javascript:
+    - index.js
+  css:
+    - styles.css
+
+exec:
+  - python
+  - "{pluginDir}/backend/main.py"
+
+interface: raw
+
 hooks:
   - name: tag-destroy
     triggeredBy:
       - Tag.Destroy.Post
+
   - name: tag-merge
     triggeredBy:
       - Tag.Merge.Post
