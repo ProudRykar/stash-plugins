@@ -856,9 +856,13 @@
     PluginApi.patch.after(
       'ImageInput',
       function (original, props) {
-        if (!React.isValidElement(original)) {
+        // Handle both (element, props) and (props) signatures
+        const element = React.isValidElement(original) ? original : null;
+        const componentProps = element ? props : original;
+
+        if (!element) {
           logError(
-            'ImageInput patch received invalid React result:',
+            'ImageInput patch received invalid React element, got:',
             original
           );
           return original;
@@ -869,12 +873,12 @@
         const enabled =
           !!(
             tagId &&
-            props &&
-            props.isEditing === true
+            componentProps &&
+            componentProps.isEditing === true
           );
 
         if (!enabled) {
-          return original;
+          return element;
         }
 
         log(
@@ -885,7 +889,7 @@
         return createElement(
           Fragment,
           null,
-          original,
+          element,
           createElement(
             TagRelationsEditBridge,
             {
@@ -906,6 +910,65 @@
   } else {
     logError(
       'PluginApi.patch.after is unavailable'
+    );
+  }
+
+  // ============================================================
+  // TagPage patch - for read-only view
+  // ============================================================
+
+  if (
+    PluginApi.patch &&
+    typeof PluginApi.patch.after ===
+      'function'
+  ) {
+    PluginApi.patch.after(
+      'TagPage',
+      function (original, props) {
+        const element = React.isValidElement(original) ? original : null;
+        const componentProps = element ? props : original;
+
+        if (!element) {
+          logError(
+            'TagPage patch received invalid React element, got:',
+            original
+          );
+          return original;
+        }
+
+        const tag = componentProps && componentProps.tag;
+        const tagId = tag && tag.id;
+
+        if (!tagId) {
+          return element;
+        }
+
+        log(
+          'TagPage patch: injecting RelatedTagsInline for tag',
+          tagId
+        );
+
+        return createElement(
+          Fragment,
+          null,
+          element,
+          createElement(
+            RelatedTagsInline,
+            {
+              key: 'tag-relations-inline-' + tagId,
+              tagId: String(tagId),
+            }
+          )
+        );
+      }
+    );
+
+    log(
+      'TagPage patch installed'
+    );
+  } else {
+    logError(
+      'PluginApi.patch.after is unavailable for TagPage'
     );
   }
 
