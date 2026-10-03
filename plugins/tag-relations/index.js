@@ -1,3 +1,4 @@
+javascript
 (function () {
   'use strict';
 
@@ -12,7 +13,6 @@
   const editStates = new Map();
 
   let currentTagId = null;
-  let scanTimer = null;
   let editScanTimer = null;
   let routeListenerInstalled = false;
 
@@ -94,7 +94,7 @@
       try {
         data = JSON.parse(data);
       } catch (error) {
-        // Keep original string.
+        // Keep original value.
       }
     }
 
@@ -160,39 +160,23 @@
   // Native Stash Tag selector
   // ============================================================
 
-  let NativeTagIDSelect =
-    PluginApi.components &&
-    PluginApi.components.TagIDSelect;
+  function getNativeTagIDSelect() {
+    const components = PluginApi.components;
 
-  async function ensureNativeTagSelector() {
-    if (NativeTagIDSelect) {
-      return NativeTagIDSelect;
+    if (!components) {
+      return null;
     }
+
+    const component = components.TagIDSelect;
 
     if (
-      PluginApi.utils &&
-      typeof PluginApi.utils.loadComponents ===
-        'function' &&
-      PluginApi.loadableComponents &&
-      PluginApi.loadableComponents.Tags
+      typeof component !== 'function' &&
+      typeof component !== 'object'
     ) {
-      try {
-        await PluginApi.utils.loadComponents([
-          PluginApi.loadableComponents.Tags,
-        ]);
-      } catch (error) {
-        logError(
-          'Failed to load Stash tag components:',
-          error
-        );
-      }
+      return null;
     }
 
-    NativeTagIDSelect =
-      PluginApi.components &&
-      PluginApi.components.TagIDSelect;
-
-    return NativeTagIDSelect || null;
+    return component;
   }
 
   // ============================================================
@@ -210,6 +194,7 @@
       container.__tagRelationsRoot.render(
         element
       );
+
       return container.__tagRelationsRoot;
     }
 
@@ -316,25 +301,26 @@
   // Relation data
   // ============================================================
 
-  /*
-   * Backend may currently return either:
-   *
-   *   [ {id, name}, ... ]
-   *
-   * or the old:
-   *
-   *   {
-   *     similar: [...],
-   *     related: [...]
-   *   }
-   *
-   * We expose only ONE concept to the UI:
-   * related tags.
-   */
-
   function normalizeRelationData(data) {
     if (Array.isArray(data)) {
-      return data;
+      return data
+        .filter(function (tag) {
+          return (
+            tag &&
+            tag.id !== undefined
+          );
+        })
+        .map(function (tag) {
+          return {
+            id: Number(tag.id),
+            name:
+              tag.name ||
+              String(tag.id),
+          };
+        })
+        .filter(function (tag) {
+          return Number.isFinite(tag.id);
+        });
     }
 
     if (!data || typeof data !== 'object') {
@@ -355,7 +341,10 @@
     similar
       .concat(related)
       .forEach(function (tag) {
-        if (!tag || tag.id === undefined) {
+        if (
+          !tag ||
+          tag.id === undefined
+        ) {
           return;
         }
 
@@ -366,9 +355,12 @@
         }
 
         seen.add(id);
+
         result.push({
           id: Number(tag.id),
-          name: tag.name || String(tag.id),
+          name:
+            tag.name ||
+            String(tag.id),
         });
       });
 
@@ -380,7 +372,10 @@
   // ============================================================
 
   function invalidateRelationCache(tagId) {
-    if (tagId === undefined || tagId === null) {
+    if (
+      tagId === undefined ||
+      tagId === null
+    ) {
       return;
     }
 
@@ -422,16 +417,6 @@
           return relations;
         })
         .catch(function (error) {
-          /*
-           * Do not retry automatically.
-           *
-           * A backend error must not result in:
-           *
-           * list_relations
-           * list_relations
-           * list_relations
-           * ...
-           */
           relationRequests.delete(key);
           throw error;
         })
@@ -452,7 +437,7 @@
   // ============================================================
 
   function RelatedTagsSelect(props) {
-    const tagId = props.tagId;
+    const tagId = Number(props.tagId);
 
     const state =
       useState(props.initialIds || []);
@@ -460,55 +445,48 @@
     const selectedIds = state[0];
     const setSelectedIds = state[1];
 
-    const [selector, setSelector] =
-      useState(null);
+    const TagIDSelect =
+      getNativeTagIDSelect();
 
     useEffect(
       function () {
-        let cancelled = false;
-
-        ensureNativeTagSelector()
-          .then(function (component) {
-            if (!cancelled) {
-              setSelector(
-                function () {
-                  return component;
-                }
-              );
-            }
-          })
-          .catch(function (error) {
-            if (!cancelled) {
-              logError(
-                'Failed to initialize native tag selector:',
-                error
-              );
-            }
-          });
-
-        return function () {
-          cancelled = true;
-        };
+        if (!TagIDSelect) {
+          logError(
+            'PluginApi.components.TagIDSelect is unavailable'
+          );
+        }
       },
       []
     );
 
     function handleSelect(tags) {
-      const ids = Array.isArray(tags)
-        ? tags.map(function (tag) {
-            return Number(tag.id);
-          })
+      /*
+       * Native TagIDSelect returns Tag objects.
+       *
+       * We keep only their numeric IDs.
+       */
+      const values = Array.isArray(tags)
+        ? tags
         : [];
 
       const uniqueIds = [];
       const seen = new Set();
 
-      ids.forEach(function (id) {
+      values.forEach(function (tag) {
+        if (!tag) {
+          return;
+        }
+
+        const id = Number(tag.id);
+
         if (!Number.isFinite(id)) {
           return;
         }
 
-        if (id === Number(tagId)) {
+        /*
+         * A tag must never be related to itself.
+         */
+        if (id === tagId) {
           return;
         }
 
@@ -528,50 +506,35 @@
       );
     }
 
-    if (!selector) {
-      return createElement(
-        'div',
-        {
-          className:
-            'tag-relations-native-select-loading',
-        },
-        'Загрузка...'
-      );
-    }
-
-    const TagIDSelect = selector();
-
     if (!TagIDSelect) {
       return createElement(
         'div',
         {
           className:
-            'tag-relations-native-select-error',
+            'tag-relations-native-select-error text-danger',
         },
         'Не удалось загрузить выбор тегов'
       );
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * TagIDSelect is Stash's own wrapper around
+     * TagSelect/GroupSelect. Do not pass react-select
+     * props such as isMulti/isClearable/excludeIds.
+     *
+     * TagIDSelect already knows that it is selecting
+     * tag IDs and handles the native Stash selector.
+     */
     return createElement(
       TagIDSelect,
       {
-        ids: selectedIds.map(String),
-
-        isMulti: true,
-
-        isClearable: true,
-
-        excludeIds: [
-          String(tagId),
-        ],
-
-        noSelectionString:
-          'Поиск связанных тегов...',
+        ids: selectedIds.map(function (id) {
+          return String(id);
+        }),
 
         onSelect: handleSelect,
-
-        className:
-          'tag-relations-native-tag-select',
       }
     );
   }
@@ -619,7 +582,13 @@
             String(tagId)
           );
 
-        if (existing) {
+        /*
+         * null means "not loaded yet".
+         * [] means "loaded and there are no relations".
+         */
+        if (
+          Array.isArray(existing)
+        ) {
           setRelations(
             existing.map(function (id) {
               return Number(id);
@@ -627,6 +596,7 @@
           );
 
           setLoading(false);
+
           return function () {
             cancelled = true;
           };
@@ -708,6 +678,7 @@
         className:
           'form-group row tag-relations-form-group',
       },
+
       createElement(
         'label',
         {
@@ -716,12 +687,14 @@
         },
         'Связанные теги'
       ),
+
       createElement(
         'div',
         {
           className:
             'col-xl-7 col-sm-9',
         },
+
         createElement(
           RelatedTagsSelect,
           {
@@ -789,8 +762,8 @@
 
     if (error) {
       /*
-       * Do not display an error in the tag page.
-       * More importantly, do not retry.
+       * The normal tag page should not show
+       * backend errors directly.
        */
       return null;
     }
@@ -813,6 +786,7 @@
     return createElement(
       Fragment,
       null,
+
       relations.map(function (tag) {
         return createElement(
           'span',
@@ -823,11 +797,14 @@
             className:
               'tag-item tag-link badge badge-secondary',
           },
+
           createElement(
             'a',
             {
-              href: getTagUrl(tag.id),
+              href:
+                getTagUrl(tag.id),
             },
+
             createElement(
               'div',
               null,
@@ -919,7 +896,6 @@
     );
 
     value.appendChild(mount);
-
     item.appendChild(title);
     item.appendChild(value);
 
@@ -1004,13 +980,6 @@
       fieldsContainer
     );
 
-    /*
-     * Initial state is loaded by RelationEditFields.
-     *
-     * We deliberately keep the current IDs outside
-     * the DOM. React state + editStates is the source
-     * of truth.
-     */
     if (
       !editStates.has(
         String(tagId)
@@ -1087,20 +1056,15 @@
     saveButton.addEventListener(
       'click',
       function () {
-        const key = String(tagId);
+        const key =
+          String(tagId);
 
         const state =
           editStates.get(key);
 
         if (!Array.isArray(state)) {
-          /*
-           * Relations have not finished loading.
-           *
-           * Do NOT overwrite anything with [].
-           */
           log(
-            'Save clicked before relations finished loading; ' +
-              'waiting for existing state'
+            'Save clicked before relations finished loading'
           );
 
           return;
@@ -1112,18 +1076,12 @@
               return Number(id);
             })
             .filter(function (id) {
-              return Number.isFinite(id) &&
-                id !== Number(tagId);
+              return (
+                Number.isFinite(id) &&
+                id !== Number(tagId)
+              );
             });
 
-        /*
-         * Give native Stash Save the opportunity
-         * to finish first.
-         *
-         * We only sync relations after edit mode
-         * disappears. If Stash validation fails and
-         * edit mode stays open, we never touch the DB.
-         */
         waitForNativeSave(
           tagId,
           form,
@@ -1146,10 +1104,6 @@
       15000;
 
     function check() {
-      /*
-       * If Stash has replaced/removed the edit form,
-       * native save succeeded and we can sync.
-       */
       const stillInDOM =
         form.isConnected &&
         document.querySelector(
@@ -1208,11 +1162,11 @@
           tag_id: Number(tagId),
 
           /*
-           * We now expose only one relation type
-           * to the UI.
+           * The UI exposes one relation concept:
+           * "related".
            *
-           * Existing "similar" relations are therefore
-           * converted into "related" relations.
+           * Existing "similar" relations are
+           * therefore converted into "related".
            */
           similar_ids: [],
           related_ids: relationIds,
@@ -1223,10 +1177,6 @@
         tagId
       );
 
-      /*
-       * Clear edit state so the next edit starts
-       * from the freshly saved database state.
-       */
       editStates.delete(
         String(tagId)
       );
@@ -1307,12 +1257,6 @@
 
     currentTagId = tagId;
 
-    /*
-     * Normal mode.
-     *
-     * If Stash has not rendered the detail group yet,
-     * installInlineRelations simply returns.
-     */
     const tagPage =
       document.querySelector(
         '#tag-page'
@@ -1353,11 +1297,6 @@
       PluginApi.Event.addEventListener(
         'stash:location',
         function () {
-          /*
-           * Stash has changed route.
-           *
-           * Do not mutate DOM from the event itself.
-           */
           setTimeout(
             scanTagPage,
             0
@@ -1376,17 +1315,6 @@
   // ============================================================
   // Edit mode detection
   // ============================================================
-
-  /*
-   * There is deliberately NO MutationObserver here.
-   *
-   * TagPage is not PatchComponent-wrapped in the current
-   * Stash UI, so we need a DOM-level way to notice that
-   * the user clicked Edit.
-   *
-   * A small idempotent poll is much safer than observing
-   * the entire React tree.
-   */
 
   function startEditModePolling() {
     if (editScanTimer) {
@@ -1483,11 +1411,13 @@
         className:
           'tag-relations-page',
       },
+
       createElement(
         'h2',
         null,
         'Tag Relations'
       ),
+
       loading
         ? createElement(
             'div',
@@ -1522,12 +1452,9 @@
   // ============================================================
 
   installRouteListener();
-
   startEditModePolling();
-
   scanTagPage();
 
-  log(
-    'loaded'
-  );
+  log('loaded');
 })();
+
