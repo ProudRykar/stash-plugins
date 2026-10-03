@@ -855,26 +855,16 @@
   ) {
     PluginApi.patch.after(
       'ImageInput',
-      function (props, original) {
-        if (
-          !React.isValidElement(
-            original
-          )
-        ) {
+      function (original, props) {
+        if (!React.isValidElement(original)) {
           logError(
             'ImageInput patch received invalid React result:',
             original
           );
-
           return original;
         }
 
-        const tagId =
-          getCurrentTagId();
-
-        /*
-         * Only inject into the Tag edit page.
-         */
+        const tagId = getCurrentTagId();
 
         const enabled =
           !!(
@@ -895,21 +885,15 @@
         return createElement(
           Fragment,
           null,
-
           original,
-
           createElement(
             TagRelationsEditBridge,
             {
               key:
                 'tag-relations-edit-' +
                 tagId,
-
-              tagId:
-                tagId,
-
-              enabled:
-                true,
+              tagId: tagId,
+              enabled: true,
             }
           )
         );
