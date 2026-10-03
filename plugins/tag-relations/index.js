@@ -14,23 +14,19 @@
   const relationCache = new Map();
   const relationRequests = new Map();
 
-  // Current selection while editing.
-  // key -> number[]
+  // tag_id -> number[]
   const editStates = new Map();
 
-  // Selection when edit form was opened.
-  // key -> number[]
+  // tag_id -> number[]
   const editInitialStates = new Map();
 
-  // key -> boolean
+  // tag_id -> boolean
   const editDirtyStates = new Map();
 
   let pageObserver = null;
   let routeListenerInstalled = false;
   let currentTagId = null;
-
-  // Prevent installing the ImageInput patch more than once.
-  let imageInputPatched = false;
+  let headerImagePatched = false;
 
   // ============================================================
   // Logging
@@ -108,7 +104,10 @@
       result.data &&
       result.data.runPluginOperation;
 
-    if (data === null || data === undefined) {
+    if (
+      data === null ||
+      data === undefined
+    ) {
       throw new Error(
         'Plugin returned an empty response'
       );
@@ -125,18 +124,25 @@
     if (
       data &&
       typeof data === 'object' &&
-      Object.prototype.hasOwnProperty.call(data, 'ok')
+      Object.prototype.hasOwnProperty.call(
+        data,
+        'ok'
+      )
     ) {
       if (!data.ok) {
         let message = 'Operation failed';
 
         if (data.error) {
-          if (typeof data.error === 'object') {
+          if (
+            typeof data.error === 'object'
+          ) {
             message =
               data.error.message ||
               message;
           } else {
-            message = String(data.error);
+            message = String(
+              data.error
+            );
           }
         }
 
@@ -174,7 +180,9 @@
   const PluginApi = window.PluginApi;
 
   if (!PluginApi) {
-    logError('PluginApi is unavailable');
+    logError(
+      'PluginApi is unavailable'
+    );
     return;
   }
 
@@ -226,8 +234,10 @@
       components.TagIDSelect;
 
     if (
-      typeof component !== 'function' &&
-      typeof component !== 'object'
+      typeof component !==
+        'function' &&
+      typeof component !==
+        'object'
     ) {
       return null;
     }
@@ -286,7 +296,9 @@
           };
         })
         .filter(function (tag) {
-          return Number.isFinite(tag.id);
+          return Number.isFinite(
+            tag.id
+          );
         });
     }
 
@@ -348,7 +360,9 @@
   // Relation cache
   // ============================================================
 
-  function invalidateRelationCache(tagId) {
+  function invalidateRelationCache(
+    tagId
+  ) {
     if (
       tagId === undefined ||
       tagId === null
@@ -356,23 +370,31 @@
       return;
     }
 
-    const key = String(tagId);
+    const key =
+      String(tagId);
 
     relationCache.delete(key);
     relationRequests.delete(key);
   }
 
   function getRelations(tagId) {
-    const key = String(tagId);
+    const key =
+      String(tagId);
 
-    if (relationCache.has(key)) {
+    if (
+      relationCache.has(key)
+    ) {
       return Promise.resolve(
         relationCache.get(key)
       );
     }
 
-    if (relationRequests.has(key)) {
-      return relationRequests.get(key);
+    if (
+      relationRequests.has(key)
+    ) {
+      return relationRequests.get(
+        key
+      );
     }
 
     const request =
@@ -384,7 +406,9 @@
       )
         .then(function (data) {
           const relations =
-            normalizeRelationData(data);
+            normalizeRelationData(
+              data
+            );
 
           relationCache.set(
             key,
@@ -394,11 +418,16 @@
           return relations;
         })
         .catch(function (error) {
-          relationRequests.delete(key);
+          relationRequests.delete(
+            key
+          );
+
           throw error;
         })
         .finally(function () {
-          relationRequests.delete(key);
+          relationRequests.delete(
+            key
+          );
         });
 
     relationRequests.set(
@@ -424,7 +453,6 @@
     ids.forEach(function (value) {
       let id = value;
 
-      // Tag object -> ID.
       if (
         id &&
         typeof id === 'object'
@@ -435,11 +463,17 @@
       const numericId =
         Number(id);
 
-      if (!Number.isFinite(numericId)) {
+      if (
+        !Number.isFinite(
+          numericId
+        )
+      ) {
         return;
       }
 
-      if (seen.has(numericId)) {
+      if (
+        seen.has(numericId)
+      ) {
         return;
       }
 
@@ -477,7 +511,9 @@
       i < left.length;
       i += 1
     ) {
-      if (left[i] !== right[i]) {
+      if (
+        left[i] !== right[i]
+      ) {
         return false;
       }
     }
@@ -486,7 +522,7 @@
   }
 
   // ============================================================
-  // Native save button
+  // Native Save button
   // ============================================================
 
   function updateSaveButton(tagId) {
@@ -494,7 +530,8 @@
       String(tagId);
 
     if (
-      editDirtyStates.get(key) !== true
+      editDirtyStates.get(key) !==
+      true
     ) {
       return;
     }
@@ -510,16 +547,18 @@
 
     if (button.disabled) {
       log(
-        'Enabling native Save button because relations changed'
+        'Enabling native Save button'
       );
     }
 
     button.disabled = false;
-    button.removeAttribute('disabled');
+    button.removeAttribute(
+      'disabled'
+    );
   }
 
   // ============================================================
-  // Synchronize relations after native Stash save
+  // Save relations
   // ============================================================
 
   async function syncRelationsAfterNativeSave(
@@ -533,11 +572,13 @@
       normalizeIds(
         relationIds
       ).filter(function (id) {
-        return id !== Number(tagId);
+        return (
+          id !== Number(tagId)
+        );
       });
 
     log(
-      'Native tag save completed; synchronizing relations:',
+      'Synchronizing relations after native save:',
       {
         tagId: Number(tagId),
         related_ids: ids,
@@ -549,12 +590,7 @@
         'set_relations',
         {
           tag_id: Number(tagId),
-
-          // The UI represents everything as
-          // "related". Therefore clear the old
-          // "similar" relations.
           similar_ids: [],
-
           related_ids: ids,
         }
       );
@@ -564,7 +600,9 @@
       );
 
       editStates.delete(key);
-      editInitialStates.delete(key);
+      editInitialStates.delete(
+        key
+      );
       editDirtyStates.delete(key);
 
       log(
@@ -572,7 +610,7 @@
       );
     } catch (error) {
       logError(
-        'Failed to synchronize relations after native save:',
+        'Failed to synchronize relations:',
         error
       );
     }
@@ -582,10 +620,11 @@
   // Related Tags selector
   //
   // IMPORTANT:
-  // This component itself is rendered from the existing
-  // Stash React tree through createPortal.
   //
-  // Therefore TagIDSelect retains Apollo context.
+  // This component is rendered inside the existing
+  // Stash React tree.
+  //
+  // Therefore TagIDSelect gets the existing Apollo context.
   // ============================================================
 
   function RelatedTagsSelect(props) {
@@ -612,7 +651,7 @@
       function () {
         if (!TagIDSelect) {
           logError(
-            'PluginApi.components.TagIDSelect is unavailable'
+            'TagIDSelect is unavailable'
           );
         }
       },
@@ -620,24 +659,19 @@
     );
 
     function handleSelect(tags) {
-      /*
-       * Native TagIDSelect calls:
-       *
-       * onSelect(items: Tag[])
-       *
-       * So this is an array of Tag objects,
-       * not an array of IDs.
-       */
       const values =
         Array.isArray(tags)
           ? tags
           : [];
 
       const ids =
-        normalizeIds(values)
-          .filter(function (id) {
-            return id !== tagId;
-          });
+        normalizeIds(
+          values
+        ).filter(function (id) {
+          return (
+            id !== tagId
+          );
+        });
 
       setSelectedIds(ids);
 
@@ -650,8 +684,9 @@
       );
 
       const initial =
-        editInitialStates.get(key) ||
-        [];
+        editInitialStates.get(
+          key
+        ) || [];
 
       const dirty =
         !sameIds(
@@ -752,7 +787,9 @@
         const existing =
           editStates.get(key);
 
-        if (Array.isArray(existing)) {
+        if (
+          Array.isArray(existing)
+        ) {
           setRelations(
             existing.slice()
           );
@@ -797,9 +834,7 @@
               false
             );
 
-            setRelations(
-              ids
-            );
+            setRelations(ids);
           })
           .catch(function (loadError) {
             if (cancelled) {
@@ -811,7 +846,10 @@
               loadError
             );
 
-            setError(loadError);
+            setError(
+              loadError
+            );
+
             setRelations([]);
           })
           .finally(function () {
@@ -855,6 +893,8 @@
       {
         className:
           'form-group row tag-relations-form-group',
+        'data-field':
+          'tag_relations',
       },
 
       createElement(
@@ -876,7 +916,9 @@
         createElement(
           RelatedTagsSelect,
           {
-            tagId: tagId,
+            tagId:
+              tagId,
+
             initialIds:
               relations || [],
           }
@@ -888,13 +930,14 @@
   // ============================================================
   // Edit bridge
   //
-  // This component is rendered INSIDE Stash's React tree.
+  // This component itself lives inside Stash's React tree.
   //
-  // The DOM node is only a portal target.
-  // React/Apollo context stays attached to this component.
+  // The generated DOM node is only the portal destination.
   // ============================================================
 
-  function TagRelationsEditBridge(props) {
+  function TagRelationsEditBridge(
+    props
+  ) {
     const tagId =
       Number(props.tagId);
 
@@ -908,7 +951,7 @@
       targetState[1];
 
     // ----------------------------------------------------------
-    // Find/create portal target
+    // Find/create portal host
     // ----------------------------------------------------------
 
     useEffect(
@@ -917,20 +960,11 @@
           return undefined;
         }
 
-        let currentTarget = null;
-        let observer = null;
+        let currentTarget =
+          null;
 
-        function removeTarget() {
-          if (
-            currentTarget &&
-            currentTarget.isConnected
-          ) {
-            currentTarget.remove();
-          }
-
-          currentTarget = null;
-          setTarget(null);
-        }
+        let observer =
+          null;
 
         function findOrCreateTarget() {
           const form =
@@ -939,9 +973,15 @@
             );
 
           if (!form) {
-            if (currentTarget) {
-              removeTarget();
+            if (
+              currentTarget &&
+              currentTarget.isConnected
+            ) {
+              currentTarget.remove();
             }
+
+            currentTarget = null;
+            setTarget(null);
 
             return;
           }
@@ -985,7 +1025,8 @@
           }
 
           if (
-            currentTarget !== container
+            currentTarget !==
+            container
           ) {
             currentTarget =
               container;
@@ -1006,34 +1047,8 @@
         if (page) {
           observer =
             new MutationObserver(
-              function (mutations) {
-                /*
-                 * We only care whether the form /
-                 * Child Tags field appeared or
-                 * disappeared.
-                 */
-                let relevant = false;
-
-                for (
-                  let i = 0;
-                  i < mutations.length;
-                  i += 1
-                ) {
-                  const mutation =
-                    mutations[i];
-
-                  if (
-                    mutation.type ===
-                    'childList'
-                  ) {
-                    relevant = true;
-                    break;
-                  }
-                }
-
-                if (relevant) {
-                  findOrCreateTarget();
-                }
+              function () {
+                findOrCreateTarget();
               }
             );
 
@@ -1096,14 +1111,18 @@
           const ids =
             editStates.get(key);
 
-          if (!Array.isArray(ids)) {
+          if (
+            !Array.isArray(ids)
+          ) {
             return [];
           }
 
           return normalizeIds(
             ids
           ).filter(function (id) {
-            return id !== tagId;
+            return (
+              id !== tagId
+            );
           });
         }
 
@@ -1118,18 +1137,19 @@
           const current =
             editStates.get(key);
 
-          if (!Array.isArray(current)) {
+          if (
+            !Array.isArray(current)
+          ) {
             log(
-              'Relations are not loaded yet; not syncing'
+              'Relations are not loaded yet'
             );
 
             return;
           }
 
-          /*
-           * Snapshot the IDs BEFORE native Stash
-           * re-renders the edit form.
-           */
+          // Snapshot before Stash destroys/recreates
+          // the edit form.
+
           const relationIds =
             getCurrentIds();
 
@@ -1170,8 +1190,7 @@
               waiting = false;
 
               logError(
-                'Native save did not finish within timeout; ' +
-                  'relations were not synchronized'
+                'Native save did not finish within timeout'
               );
 
               return;
@@ -1239,7 +1258,7 @@
     );
 
     // ----------------------------------------------------------
-    // Keep native Save enabled
+    // Keep native Save button enabled
     // ----------------------------------------------------------
 
     useEffect(
@@ -1253,9 +1272,13 @@
 
         function update() {
           if (
-            editDirtyStates.get(key) === true
+            editDirtyStates.get(
+              key
+            ) === true
           ) {
-            updateSaveButton(tagId);
+            updateSaveButton(
+              tagId
+            );
           }
         }
 
@@ -1296,10 +1319,6 @@
       ]
     );
 
-    // ----------------------------------------------------------
-    // Portal
-    // ----------------------------------------------------------
-
     if (!target) {
       return null;
     }
@@ -1308,7 +1327,8 @@
       createElement(
         RelationEditFields,
         {
-          tagId: tagId,
+          tagId:
+            tagId,
         }
       ),
       target
@@ -1316,17 +1336,18 @@
   }
 
   // ============================================================
-  // Patch ImageInput
+  // Patch HeaderImage
   //
   // IMPORTANT:
   //
-  // We validate `original` before putting it into React.
-  // This prevents React #31 if a particular Stash build
-  // returns something that is not a React element.
+  // ImageInput was returning {} in this Stash build.
+  //
+  // HeaderImage is a documented patchable Stash component,
+  // and is inside the same React tree as the tag editor.
   // ============================================================
 
-  function installImageInputPatch() {
-    if (imageInputPatched) {
+  function installHeaderImagePatch() {
+    if (headerImagePatched) {
       return;
     }
 
@@ -1343,47 +1364,47 @@
     }
 
     PluginApi.patch.after(
-      'ImageInput',
+      'HeaderImage',
       function (props, original) {
-        /*
-         * If Stash gives us something that isn't
-         * a React element, DO NOT pass it as a
-         * React child.
-         *
-         * This is specifically to prevent:
-         *
-         * React error #31
-         * object with keys {}
-         */
-        if (
-          !React.isValidElement(original)
-        ) {
-          logError(
-            'ImageInput patch received invalid React result:',
-            original
-          );
-
-          return original;
-        }
-
         const tagId =
           getCurrentTagId();
 
+        // Only activate on a tag page.
+
+        if (!tagId) {
+          return original;
+        }
+
+        // HeaderImage itself is used on the tag page,
+        // but we only need the bridge while the editor
+        // exists.
+
         const enabled =
-          !!(
-            tagId &&
-            props &&
-            props.isEditing === true
+          !!document.querySelector(
+            '#tag-page #tag-edit'
           );
 
         if (!enabled) {
           return original;
         }
 
-        /*
-         * Both children are now guaranteed to be
-         * valid React elements.
-         */
+        // If the Stash render result is somehow not a
+        // React element, don't put it into another React
+        // element. Preserve native result.
+
+        if (
+          !React.isValidElement(
+            original
+          )
+        ) {
+          logError(
+            'HeaderImage patch received invalid React result:',
+            original
+          );
+
+          return original;
+        }
+
         return createElement(
           Fragment,
           null,
@@ -1408,17 +1429,17 @@
       }
     );
 
-    imageInputPatched = true;
+    headerImagePatched = true;
 
     log(
-      'Patched native ImageInput for edit portal'
+      'Patched HeaderImage for edit portal'
     );
   }
 
-  installImageInputPatch();
+  installHeaderImagePatch();
 
   // ============================================================
-  // Inline normal-view component
+  // Normal tag-page component
   // ============================================================
 
   function RelatedTagsInline(props) {
@@ -1505,7 +1526,8 @@
           return createElement(
             'span',
             {
-              key: tag.id,
+              key:
+                tag.id,
 
               'data-sort-name':
                 tag.name,
@@ -1539,7 +1561,9 @@
   // Inline React lifecycle
   // ============================================================
 
-  function unmountInlineReact(mount) {
+  function unmountInlineReact(
+    mount
+  ) {
     if (!mount) {
       return;
     }
@@ -1566,10 +1590,12 @@
   }
 
   // ============================================================
-  // Install normal-view relations
+  // Normal view
   // ============================================================
 
-  function installInlineRelations(tagId) {
+  function installInlineRelations(
+    tagId
+  ) {
     const detailGroup =
       document.querySelector(
         '#tag-page .detail-group'
@@ -1579,7 +1605,6 @@
       return;
     }
 
-    // Never render inline block while editing.
     if (
       document.querySelector(
         '#tag-page #tag-edit'
@@ -1727,7 +1752,7 @@
   }
 
   // ============================================================
-  // Cleanup inline view
+  // Cleanup normal view
   // ============================================================
 
   function cleanupInlineRelations() {
@@ -1771,6 +1796,7 @@
       }
 
       currentTagId = null;
+
       return;
     }
 
@@ -1781,15 +1807,21 @@
       cleanupInlineRelations();
 
       editStates.delete(
-        String(currentTagId)
+        String(
+          currentTagId
+        )
       );
 
       editInitialStates.delete(
-        String(currentTagId)
+        String(
+          currentTagId
+        )
       );
 
       editDirtyStates.delete(
-        String(currentTagId)
+        String(
+          currentTagId
+        )
       );
     }
 
@@ -1821,7 +1853,7 @@
   }
 
   // ============================================================
-  // Scoped observer for normal view
+  // DOM observer
   // ============================================================
 
   function startPageObserver() {
@@ -1916,25 +1948,6 @@
   }
 
   // ============================================================
-  // Cleanup
-  // ============================================================
-
-  function cleanup() {
-    cleanupInlineRelations();
-
-    if (pageObserver) {
-      pageObserver.disconnect();
-      pageObserver = null;
-    }
-
-    editStates.clear();
-    editInitialStates.clear();
-    editDirtyStates.clear();
-
-    currentTagId = null;
-  }
-
-  // ============================================================
   // Start
   // ============================================================
 
@@ -1945,6 +1958,6 @@
   scanTagPage();
 
   log(
-    'loaded - native TagIDSelect is rendered through Stash React/Apollo context'
+    'loaded - using HeaderImage as React/Apollo bridge'
   );
 })();
