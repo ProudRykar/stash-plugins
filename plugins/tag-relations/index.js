@@ -13,6 +13,12 @@
   const relationRequests = new Map();
   const editStates = new Map();
 
+  /*
+   * Tag ids whose related tags were changed by the user
+   * and have not been saved yet.
+   */
+  const pendingRelationEdits = new Set();
+
   let currentTagId = null;
   let editScanTimer = null;
   let routeListenerInstalled = false;
@@ -469,10 +475,31 @@
 
       setSelectedIds(uniqueIds);
 
+      const previous =
+        editStates.get(
+          String(tagId)
+        );
+
       editStates.set(
         String(tagId),
         uniqueIds
       );
+
+      /*
+       * The related tags field is not part of Formik,
+       * so formik.dirty never becomes true for it.
+       * Remember the change so Save can be enabled.
+       */
+
+      if (
+        !Array.isArray(previous) ||
+        previous.join(',') !==
+          uniqueIds.join(',')
+      ) {
+        pendingRelationEdits.add(
+          String(tagId)
+        );
+      }
 
       log(
         'Related tags changed:',
@@ -1452,6 +1479,39 @@
       return;
     }
 
+    /*
+     * Stash disables Save whenever formik.dirty is false.
+     *
+     * The related tags field lives outside Formik, and
+     * Stash exposes no Formik context, so formik.dirty
+     * can never become true for our change. Neither
+     * TagEditPanel nor DetailsEditNavbar is patchable.
+     *
+     * Enable the button ourselves while a change is
+     * pending. It is only ever re-enabled, never
+     * re-disabled: Stash re-disables it on its own
+     * whenever its dirty state flips, and the poll
+     * below restores it if that happens while our
+     * change is still pending.
+     */
+
+    if (
+      pendingRelationEdits.has(
+        String(tagId)
+      ) &&
+      saveButton.disabled
+    ) {
+      saveButton.disabled = false;
+      saveButton.removeAttribute(
+        'disabled'
+      );
+
+      log(
+        'Enabled Save for pending related tag changes:',
+        tagId
+      );
+    }
+
     if (
       saveButton.hasAttribute(
         SAVE_PATCH_MARKER
@@ -1631,6 +1691,10 @@
         String(tagId)
       );
 
+      pendingRelationEdits.delete(
+        String(tagId)
+      );
+
       log(
         'Related tags saved successfully'
       );
@@ -1708,6 +1772,25 @@
   // Tag page scan
   // ============================================================
 
+  /*
+   * Leaving edit mode (cancel, saved, or navigating
+   * away) discards anything the user did not save.
+   */
+  function dropPendingEditState(tagId) {
+    if (
+      tagId === null ||
+      tagId === undefined
+    ) {
+      return;
+    }
+
+    editStates.delete(String(tagId));
+
+    pendingRelationEdits.delete(
+      String(tagId)
+    );
+  }
+
   function scanTagPage() {
     const tagId =
       getCurrentTagId();
@@ -1720,6 +1803,7 @@
       if (
         currentTagId !== null
       ) {
+        dropPendingEditState(currentTagId);
         cleanupPluginUI();
         currentTagId = null;
       }
@@ -1735,6 +1819,7 @@
       currentTagId !== null &&
       currentTagId !== tagId
     ) {
+      dropPendingEditState(currentTagId);
       cleanupPluginUI();
     }
 
@@ -1773,8 +1858,11 @@
     }
 
     /*
-     * Normal view.
+     * Normal view: edit mode was left (cancel, saved,
+     * or the form was torn down).
      */
+
+    dropPendingEditState(tagId);
 
     installInlineRelations(
       tagId
