@@ -5,6 +5,10 @@ Stash plugin that shows a zodiac sign icon on the performer page.
 The sign is derived from the performer's **Birthdate** field and is placed next to
 the rating and O-Count, inside the same `quality-group` container Stash uses.
 
+The symbols are the zodiac artwork by Denis Moskowitz from Wikimedia Commons,
+used under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+See [CREDITS.md](CREDITS.md) for the full terms and the list of changes.
+
 ## Features
 
 * Zodiac sign icon next to the performer rating
@@ -105,8 +109,10 @@ If the component cannot be patched, the plugin falls back to querying the
 performer over GraphQL. That fallback waits briefly and never overwrites data the
 component patch already provided.
 
-The sign glyphs are inline SVG line drawings stroked with `currentColor`, so they
-follow the Stash theme and the per-sign colour without any external assets.
+The sign glyphs are the zodiac symbols by Denis Moskowitz (Wikimedia Commons,
+CC BY-SA 4.0). They are inline SVG stroke drawings on a 12x12 grid, coloured
+entirely through CSS so they follow the Stash theme and the per-sign colour
+without any external assets.
 
 ## Requirements
 
@@ -115,6 +121,15 @@ follow the Stash theme and the per-sign colour without any external assets.
 
 No Python and no additional packages are required.
 
+## Credits
+
+* Zodiac sign symbols by [Denis Moskowitz](http://www.suberic.net/dmm/astro/),
+  via [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Astrological_symbols),
+  licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+
 ## License
 
-See the repository for the applicable license.
+The plugin code is distributed under the license of this repository.
+
+The zodiac sign symbols are a separate work licensed under CC BY-SA 4.0.
+See [CREDITS.md](CREDITS.md).

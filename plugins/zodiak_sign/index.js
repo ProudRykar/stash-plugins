@@ -19,7 +19,7 @@
   const FALLBACK_DELAY = 1000;
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const SVG_VIEW_BOX = "0 0 24 24";
+  const SVG_VIEW_BOX = "0 0 12 12";
 
   function log() {
     console.log("[Zodiac Sign]", ...arguments);
@@ -126,8 +126,12 @@
   // The twelve ranges form a contiguous partition of the year,
   // so there are no gaps and no overlapping cusps.
   //
-  // Every glyph is a line drawing on a 24x24 grid and is stroked
-  // with `currentColor`, so it inherits the badge colour.
+  // `glyph` holds the path data of the sign symbol by Denis
+  // Moskowitz, published on Wikimedia Commons under CC BY-SA 4.0.
+  // See CREDITS.md for the full terms.
+  //
+  // The artwork uses a 12x12 viewBox and is a stroke-only line
+  // drawing, so the badge colours it entirely through CSS.
   // ============================================================
 
   const SIGNS = [
@@ -139,12 +143,8 @@
       from: [12, 22],
       to: [1, 19],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3 17Q3 9.5 7.5 10.5Q10.5 11 8.5 15C11.5 15 13.5 11.5 15 8.5C16.5 5.5 20 6.5 19.5 10C19 14 16 18.5 12.5 20Q10.5 21 12.5 21.3Q16.5 22 20.5 18.5",
-        },
-      ],
+      glyph:
+        "M.85 4.333h1.667L4.183 11 5.85 4.333h3.333A1.666 1.666 0 1 0 7.74 3.5l2.887 5a1.667 1.667 0 1 1-3.11.833",
     },
 
     {
@@ -154,12 +154,8 @@
       from: [1, 20],
       to: [2, 18],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3 8L6 5L9 8L12 5L15 8L18 5L21 8M3 15.5L6 12.5L9 15.5L12 12.5L15 15.5L18 12.5L21 15.5",
-        },
-      ],
+      glyph:
+        "M1 7.75a1.77 1.77 0 0 1 2.5 0 1.767 1.767 0 0 0 2.5 0 1.77 1.77 0 0 1 2.5 0 1.767 1.767 0 0 0 2.5 0M1 4.25a1.77 1.77 0 0 1 2.5 0 1.767 1.767 0 0 0 2.5 0 1.77 1.77 0 0 1 2.5 0 1.767 1.767 0 0 0 2.5 0",
     },
 
     {
@@ -169,12 +165,8 @@
       from: [2, 19],
       to: [3, 20],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M8 3.5A7 7 0 0 0 8 20.5M16 3.5A7 7 0 0 1 16 20.5M4 12H20",
-        },
-      ],
+      glyph:
+        "M9.125 1.67a5 5 0 0 0 0 8.66m-6.25 0a5 5 0 0 0 0-8.66M1 5.998h10.003",
     },
 
     {
@@ -184,12 +176,8 @@
       from: [3, 21],
       to: [4, 19],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M12 20.5V11.5M12 11.5A5 5 0 0 0 4.6 6.5M12 11.5A5 5 0 0 1 19.4 6.5",
-        },
-      ],
+      glyph:
+        "M1.732 5.418A2.5 2.5 0 1 1 6 3.65a2.5 2.5 0 1 1 4.268 1.768M6 3.65v7.5",
     },
 
     {
@@ -199,13 +187,8 @@
       from: [4, 20],
       to: [5, 20],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M7.9 10.8C6.6 8 3.5 6.6 4.6 3.2M16.1 10.8C17.4 8 20.5 6.6 19.4 3.2",
-        },
-        { type: "circle", cx: 12, cy: 15, r: 5.5 },
-      ],
+      glyph:
+        "M9.333 7.517a3.333 3.333 0 1 0-6.666-.001 3.333 3.333 0 0 0 6.666 0zM2.667.85a3.333 3.333 0 1 0 6.666 0",
     },
 
     {
@@ -215,12 +198,8 @@
       from: [5, 21],
       to: [6, 20],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M9 3.5V20.5M15 3.5V20.5M6 3.5H18M6 20.5H18",
-        },
-      ],
+      glyph:
+        "M3.5 2.022v7.956m5-7.956v7.956M11 1A9.995 9.995 0 0 1 1 1m10 10a10.001 10.001 0 0 0-10 0",
     },
 
     {
@@ -230,12 +209,8 @@
       from: [6, 21],
       to: [7, 22],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M4 9.5a3.5 3.5 0 1 0 0 5h9M20 14.5a3.5 3.5 0 1 0 0 -5h-9",
-        },
-      ],
+      glyph:
+        "M11 6a1.667 1.667 0 1 0-3.334 0A1.667 1.667 0 0 0 11 6zM1 6a1.667 1.667 0 1 0 3.334 0A1.667 1.667 0 0 0 1 6zm10 0a5 5 0 0 0-8.535-3.535M1 6a5 5 0 0 0 8.535 3.535",
     },
 
     {
@@ -245,13 +220,8 @@
       from: [7, 23],
       to: [8, 22],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M9.3 14.2C12 12 13.6 6.8 16.8 5.8C19.6 4.9 21.2 8.2 19.4 10.6C18 12.6 15.4 12.2 14.8 10.2",
-        },
-        { type: "circle", cx: 6.5, cy: 16.5, r: 3.5 },
-      ],
+      glyph:
+        "M4.75 7.25C4.75 6 3.5 4.75 3.5 3.5a2.5 2.5 0 0 1 5 0c0 2.5-1.25 3.75-1.25 6.25a1.25 1.25 0 0 0 2.5 0m-5-2.5a1.25 1.25 0 1 0-2.5 0 1.25 1.25 0 0 0 2.5 0zm0 0",
     },
 
     {
@@ -261,12 +231,8 @@
       from: [8, 23],
       to: [9, 22],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3.5 5.5V12Q3.5 16 6 16Q8.5 16 8.5 12V5.5M8.5 12Q8.5 16 11 16Q13.5 16 13.5 12V5.5M13.5 12Q13.5 16 16 14.8Q18.5 13.6 18.5 10.8Q18.5 8 16 8.6Q14.2 9.1 15.2 11.6Q16.2 14.2 20.5 15.8",
-        },
-      ],
+      glyph:
+        "M1.366 4.384A1.25 1.25 0 1 1 3.5 3.5v5m5-3.75a1.25 1.25 0 0 1 2.5 0A3.75 3.75 0 0 1 7.25 8.5M6 3.5a1.25 1.25 0 0 1 2.5 0v5c0 .69.56 1.25 1.25 1.25M3.5 3.5a1.25 1.25 0 0 1 2.5 0v5",
     },
 
     {
@@ -276,12 +242,7 @@
       from: [9, 23],
       to: [10, 22],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3 20.5H21M3 13H21M6.5 16.5A5.5 5.5 0 0 1 17.5 16.5",
-        },
-      ],
+      glyph: "M1 6h2.5a2.5 2.5 0 0 1 5 0H11M1 8.5h10",
     },
 
     {
@@ -291,12 +252,8 @@
       from: [10, 23],
       to: [11, 21],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3.5 5V12Q3.5 15.5 6 15.5Q8.5 15.5 8.5 12V5M8.5 12Q8.5 15.5 11 15.5Q13.5 15.5 13.5 12V5M13.5 12Q13.5 15.5 16 15.5Q18.5 15.5 18.5 12V11.5Q18.5 8 21 8M18 5.2L21 8L18 10.8",
-        },
-      ],
+      glyph:
+        "M10.009 8.241v-1.25h1.25M1.366 4.384A1.25 1.25 0 1 1 3.5 3.5v5m0-5a1.25 1.25 0 0 1 2.5 0v5m0-5a1.25 1.25 0 0 1 2.5 0v5a1.25 1.25 0 1 0 2.134-.884l-.5-.5",
     },
 
     {
@@ -306,12 +263,7 @@
       from: [11, 22],
       to: [12, 21],
 
-      shapes: [
-        {
-          type: "path",
-          d: "M3.5 20.5H13.5M3.5 20.5L20.5 3.5M20.5 3.5H14.5M20.5 3.5V9.5",
-        },
-      ],
+      glyph: "m3.456 3.544 5 5m-7.5 2.5 10-10m-2.5 0h2.5v2.5",
     },
   ];
 
@@ -521,22 +473,20 @@
   // Badge
   // ============================================================
 
-  function createShape(shape) {
-    if (shape.type === "circle") {
-      const circle = document.createElementNS(SVG_NS, "circle");
+  function createGlyph(sign) {
+    const svg = document.createElementNS(SVG_NS, "svg");
 
-      circle.setAttribute("cx", String(shape.cx));
-      circle.setAttribute("cy", String(shape.cy));
-      circle.setAttribute("r", String(shape.r));
-
-      return circle;
-    }
+    svg.setAttribute("viewBox", SVG_VIEW_BOX);
+    svg.setAttribute("focusable", "false");
+    svg.setAttribute("aria-hidden", "true");
 
     const path = document.createElementNS(SVG_NS, "path");
 
-    path.setAttribute("d", shape.d);
+    path.setAttribute("d", sign.glyph);
 
-    return path;
+    svg.appendChild(path);
+
+    return svg;
   }
 
   function createBadge(sign) {
@@ -553,15 +503,7 @@
     badge.setAttribute("title", title);
     badge.setAttribute("aria-label", title);
 
-    const svg = document.createElementNS(SVG_NS, "svg");
-
-    svg.setAttribute("viewBox", SVG_VIEW_BOX);
-    svg.setAttribute("focusable", "false");
-    svg.setAttribute("aria-hidden", "true");
-
-    sign.shapes.forEach(function (shape) {
-      svg.appendChild(createShape(shape));
-    });
+    const svg = createGlyph(sign);
 
     badge.appendChild(svg);
 
