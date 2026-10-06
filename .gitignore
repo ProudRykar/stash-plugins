@@ -908,3 +908,4 @@ tmp/
 
 *.patch.local
 *.diff.local
+.aider*

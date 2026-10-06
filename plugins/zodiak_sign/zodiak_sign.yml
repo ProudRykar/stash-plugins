@@ -1,0 +1,18 @@
+name: Zodiac Sign
+description: Shows the zodiac sign icon next to the rating on the performer page.
+version: 0.1.0
+url: https://github.com/ProudRykar/stash-plugins
+
+interface: raw
+
+ui:
+  javascript:
+    - index.js
+  css:
+    - styles.css
+
+settings:
+  showName:
+    displayName: Show sign name
+    description: Display the zodiac sign name next to the icon.
+    type: BOOLEAN
