@@ -1,0 +1,35 @@
+name: Many Studios
+description: Associate multiple studios with a single scene
+version: 0.1.0
+url: https://github.com/ProudRykar/stash-plugins
+
+settings:
+  stash_url:
+    displayName: Stash URL
+    type: STRING
+  database_path:
+    displayName: Database path
+    type: STRING
+
+ui:
+  javascript:
+    - index.js
+  css:
+    - styles.css
+
+exec:
+  - python
+  - "{pluginDir}/backend/main.py"
+
+interface: raw
+
+hooks:
+  - name: scene-destroy
+    triggeredBy:
+      - Scene.Destroy.Post
+  - name: scene-update
+    triggeredBy:
+      - Scene.Update.Post
+  - name: studio-destroy
+    triggeredBy:
+      - Studio.Destroy.Post
