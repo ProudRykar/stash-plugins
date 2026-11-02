@@ -5,39 +5,23 @@
 
   const MESSAGES = {
     en: {
-      additionalStudios: "Additional Studios",
-      addStudio: "+ Add Studio",
-      addAdditionalStudios: "Add Additional Studios",
-      noAdditionalStudios: "No additional studios",
-      primary: "Primary",
+      otherStudios: "Other Studios",
       loading: "Loading...",
       loadingScenes: "Loading scenes...",
-      searchStudios: "Search studios...",
-      searchScenes: "Search scenes...",
-      noResults: "No results",
-      cancel: "Cancel",
-      remove: "Remove",
       relatedScenes: "Scenes with this studio as additional",
       noLinkedScenes: "No scenes linked to this studio",
       saveFailed: "Failed to save studios",
+      selectorError: "Studio selector is unavailable",
       loadFailed: "Failed to load",
     },
     ru: {
-      additionalStudios: "Дополнительные студии",
-      addStudio: "+ Добавить студию",
-      addAdditionalStudios: "Добавить дополнительные студии",
-      noAdditionalStudios: "Нет дополнительных студий",
-      primary: "Основная",
+      otherStudios: "Другие студии",
       loading: "Загрузка...",
       loadingScenes: "Загрузка сцен...",
-      searchStudios: "Поиск студий...",
-      searchScenes: "Поиск сцен...",
-      noResults: "Ничего не найдено",
-      cancel: "Отмена",
-      remove: "Удалить",
       relatedScenes: "Сцены, где эта студия дополнительная",
       noLinkedScenes: "Нет сцен, связанных с этой студией",
       saveFailed: "Не удалось сохранить студии",
+      selectorError: "Селектор студий недоступен",
       loadFailed: "Не удалось загрузить",
     },
   };
@@ -71,7 +55,6 @@
   const Fragment = React.Fragment;
   const useState = React.useState;
   const useEffect = React.useEffect;
-  const useRef = React.useRef;
 
   function log(...args) {
     console.log("[Many Studios]", ...args);
@@ -161,246 +144,328 @@
     return Number.isFinite(id) ? id : null;
   }
 
-  function getStudioUrl(id) {
-    return "/studios/" + id;
-  }
-
   function getSceneUrl(id) {
     return "/scenes/" + id;
   }
 
-  function SceneAdditionalStudiosPanel(props) {
-    const sceneId = props.sceneId;
-    const [data, setData] = useState({ primary: null, additional: [] });
-    const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
+  function getNativeStudioIDSelect() {
+    const components = PluginApi.components;
 
-    function load() {
-      if (!sceneId) return;
-      setLoading(true);
-      runPluginOperation("list_scene_studios", { scene_id: sceneId })
-        .then(function (result) {
-          setData(result || { primary: null, additional: [] });
-        })
-        .catch(function (error) {
-          logError("Failed to load studios", error);
-        })
-        .finally(function () {
-          setLoading(false);
-        });
+    if (!components) {
+      return null;
     }
 
-    useEffect(
-      function () {
-        load();
-      },
-      [sceneId]
-    );
+    const component = components.StudioIDSelect;
 
-    function removeStudio(studioId) {
-      runPluginOperation("remove_scene_studio", { scene_id: sceneId, studio_id: studioId })
-        .then(function () {
-          load();
-        })
-        .catch(function (error) {
-          logError("Failed to remove studio", error);
-          alert(t("saveFailed") + ": " + error.message);
-        });
+    if (typeof component !== "function" && typeof component !== "object") {
+      return null;
     }
 
-    function addStudio(studioId) {
-      runPluginOperation("add_scene_studio", { scene_id: sceneId, studio_id: studioId })
-        .then(function () {
-          setShowModal(false);
-          load();
-        })
-        .catch(function (error) {
-          logError("Failed to add studio", error);
-          alert(t("saveFailed") + ": " + error.message);
-        });
-    }
-
-    return createElement(
-      "div",
-      { className: "many-studios-panel" },
-      createElement(
-        "div",
-        { className: "many-studios-header" },
-        createElement("h5", { className: "many-studios-title" }, t("additionalStudios")),
-        createElement(
-          "button",
-          {
-            className: "btn btn-secondary btn-sm many-studios-add-btn",
-            onClick: function () {
-              setShowModal(true);
-            },
-          },
-          t("addStudio")
-        )
-      ),
-      loading
-        ? createElement("div", { className: "many-studios-status" }, t("loading"))
-        : createElement(
-            Fragment,
-            null,
-            data.additional && data.additional.length > 0
-              ? createElement(
-                  "div",
-                  { className: "many-studios-list" },
-                  data.additional.map(function (studio) {
-                    return createElement(
-                      "div",
-                      { key: studio.id, className: "many-studios-item" },
-                      createElement(
-                        "a",
-                        { href: getStudioUrl(studio.id), className: "many-studios-link" },
-                        studio.name
-                      ),
-                      createElement(
-                        "button",
-                        {
-                          className: "many-studios-remove",
-                          onClick: function () {
-                            removeStudio(studio.id);
-                          },
-                          title: t("remove"),
-                        },
-                        "×"
-                      )
-                    );
-                  })
-                )
-              : createElement("div", { className: "many-studios-empty" }, t("noAdditionalStudios"))
-          ),
-      showModal
-        ? createElement(StudioSearchModal, {
-            title: t("addAdditionalStudios"),
-            onClose: function () {
-              setShowModal(false);
-            },
-            onSelect: addStudio,
-            exclude: [data.primary && data.primary.id].concat(
-              (data.additional || []).map(function (s) {
-                return s.id;
-              })
-            ),
-          })
-        : null
-    );
+    return component;
   }
 
-  function StudioSearchModal(props) {
-    const [search, setSearch] = useState("");
-    const [results, setResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const inputRef = useRef(null);
+  function createSceneAdditionalStudiosHost(sceneId) {
+    const scenePage =
+      document.querySelector("#scene-page") ||
+      document.querySelector(".scene-tabs");
 
-    useEffect(
-      function () {
-        if (inputRef.current) inputRef.current.focus();
-      },
-      []
+    if (!scenePage) {
+      return null;
+    }
+
+    const existing = Array.from(
+      scenePage.querySelectorAll(".many-studios-inline-item"),
+    ).find(function (item) {
+      return item.getAttribute("data-scene-id") === String(sceneId);
+    });
+
+    if (existing) {
+      return existing.querySelector(".many-studios-inline-mount");
+    }
+
+    const detailGroup = scenePage.querySelector(".detail-group");
+    const studioField = detailGroup
+      ? detailGroup.querySelector(
+          ".detail-item.studio, .detail-item.studios, .detail-item[data-field='studio']",
+        )
+      : null;
+
+    const sceneHeader = scenePage.querySelector(".scene-header-container");
+    const studioLogo = scenePage.querySelector(
+      ".scene-header-container h1.studio-logo",
     );
+    const anchor = studioField || sceneHeader || studioLogo || detailGroup;
+
+    if (!anchor) {
+      return null;
+    }
+
+    const item = document.createElement("div");
+    item.className = "detail-item many-studios-inline-item";
+    item.setAttribute("data-scene-id", String(sceneId));
+
+    if (!studioField && (studioLogo || sceneHeader)) {
+      item.classList.add("many-studios-inline-header");
+    }
+
+    const title = document.createElement("span");
+    title.className = "detail-item-title";
+    title.textContent = t("otherStudios") + ":";
+
+    const value = document.createElement("span");
+    value.className = "detail-item-value many-studios-inline-value";
+
+    const mount = document.createElement("span");
+    mount.className = "many-studios-inline-mount";
+
+    value.appendChild(mount);
+    item.appendChild(title);
+    item.appendChild(value);
+
+    if (studioField || studioLogo || sceneHeader) {
+      anchor.insertAdjacentElement("afterend", item);
+    } else {
+      anchor.appendChild(item);
+    }
+
+    return mount;
+  }
+
+  function SceneAdditionalStudiosInline(props) {
+    const sceneId = props.sceneId;
+    const [data, setData] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [loadError, setLoadError] = useState(null);
 
     useEffect(
       function () {
-        const timer = setTimeout(function () {
-          if (search.trim().length >= 2) {
-            doSearch();
-          } else {
-            setResults([]);
-          }
-        }, 300);
+        let cancelled = false;
+
+        runPluginOperation("list_scene_studios", { scene_id: sceneId })
+          .then(function (result) {
+            if (cancelled) {
+              return;
+            }
+
+            const normalized = result || { primary: null, additional: [] };
+            const additional = normalized.additional || [];
+
+            setData(normalized);
+            setSelectedIds(
+              additional.map(function (studio) {
+                return String(studio.id);
+              }),
+            );
+          })
+          .catch(function (error) {
+            if (!cancelled) {
+              logError("Failed to load studios", error);
+              setLoadError(error);
+            }
+          })
+          .finally(function () {
+            if (!cancelled) {
+              setLoading(false);
+            }
+          });
+
         return function () {
-          clearTimeout(timer);
+          cancelled = true;
         };
       },
-      [search]
+      [sceneId],
     );
 
-    function doSearch() {
-      setLoading(true);
-      runPluginOperation("find_studios", { search: search.trim(), per_page: 30 })
-        .then(function (data) {
-          const exclude = props.exclude || [];
-          const excludeSet = {};
-          exclude.forEach(function (id) {
-            if (id) excludeSet[String(id)] = true;
-          });
-          const filtered = (data || []).filter(function (studio) {
-            return !excludeSet[String(studio.id)];
-          });
-          setResults(filtered);
+    function handleSelect(studios) {
+      const previousIds = selectedIds.slice();
+      const primaryId = data && data.primary ? Number(data.primary.id) : null;
+      const uniqueIds = [];
+      const seen = new Set();
+
+      (Array.isArray(studios) ? studios : []).forEach(function (studio) {
+        if (!studio || studio.id === undefined || studio.id === null) {
+          return;
+        }
+
+        const id = Number(studio.id);
+
+        if (!Number.isFinite(id) || id === primaryId || seen.has(id)) {
+          return;
+        }
+
+        seen.add(id);
+        uniqueIds.push(id);
+      });
+
+      const nextIds = uniqueIds.map(function (id) {
+        return String(id);
+      });
+
+      if (previousIds.join(",") === nextIds.join(",")) {
+        return;
+      }
+
+      setSelectedIds(nextIds);
+      setSaving(true);
+
+      runPluginOperation("set_scene_studios", {
+        scene_id: sceneId,
+        studio_ids: uniqueIds,
+      })
+        .then(function (result) {
+          const normalized = result || { primary: data && data.primary, additional: [] };
+          const additional = normalized.additional || [];
+
+          setData(normalized);
+          setSelectedIds(
+            additional.map(function (studio) {
+              return String(studio.id);
+            }),
+          );
         })
         .catch(function (error) {
-          logError("Search failed", error);
+          logError("Failed to save studios", error);
+          setSelectedIds(previousIds);
+          alert(t("saveFailed") + ": " + error.message);
         })
         .finally(function () {
-          setLoading(false);
+          setSaving(false);
         });
     }
 
-    function handleSelect(studio) {
-      props.onSelect(studio.id);
+    if (loading || !props.nativeReady) {
+      return createElement(
+        "span",
+        { className: "many-studios-inline-status text-muted" },
+        t("loading"),
+      );
     }
 
-    return createElement(
-      "div",
-      { className: "many-studios-modal-overlay", onClick: props.onClose },
-      createElement(
-        "div",
-        { className: "many-studios-modal", onClick: function (e) { e.stopPropagation(); } },
-        createElement(
-          "div",
-          { className: "many-studios-modal-header" },
-          createElement("h4", null, props.title || t("addStudio")),
-          createElement(
-            "button",
-            { className: "many-studios-modal-close", onClick: props.onClose },
-            "×"
-          )
-        ),
-        createElement(
-          "div",
-          { className: "many-studios-modal-body" },
-          createElement("input", {
-            ref: inputRef,
-            type: "text",
-            className: "many-studios-modal-input",
-            value: search,
-            onChange: function (e) { return setSearch(e.target.value); },
-            placeholder: t("searchStudios"),
-          }),
-          loading
-            ? createElement("div", { className: "many-studios-status" }, t("loading"))
-            : createElement(
-                "div",
-                { className: "many-studios-modal-results" },
-                results.length === 0 && search.trim().length >= 2
-                  ? createElement("div", { className: "many-studios-empty" }, t("noResults"))
-                  : results.map(function (studio) {
-                      return createElement(
-                        "button",
-                        {
-                          key: studio.id,
-                          className: "many-studios-modal-result",
-                          onClick: function () { return handleSelect(studio); },
-                        },
-                        studio.name
-                      );
-                    })
-              )
-        ),
-        createElement(
-          "div",
-          { className: "many-studios-modal-footer" },
-          createElement(
-            "button",
-            { className: "btn btn-secondary btn-sm", onClick: props.onClose },
-            t("cancel")
-          )
-        )
-      )
+    if (loadError) {
+      return createElement(
+        "span",
+        { className: "many-studios-inline-error text-danger" },
+        t("loadFailed") + ": " + loadError.message,
+      );
+    }
+
+    const StudioIDSelect = getNativeStudioIDSelect();
+
+    if (!StudioIDSelect) {
+      return createElement(
+        "span",
+        { className: "many-studios-inline-error text-danger" },
+        t("selectorError"),
+      );
+    }
+
+    return createElement(StudioIDSelect, {
+      isMulti: true,
+      ids: selectedIds,
+      excludeIds:
+        data && data.primary ? [String(data.primary.id)] : [],
+      onSelect: handleSelect,
+      creatable: false,
+      isDisabled: saving,
+    });
+  }
+
+  function SceneAdditionalStudiosBridge(props) {
+    const sceneId = props.sceneId;
+    const [target, setTarget] = useState(null);
+    const [nativeReady, setNativeReady] = useState(
+      !!getNativeStudioIDSelect(),
+    );
+
+    useEffect(
+      function () {
+        let cancelled = false;
+        let observer = null;
+
+        function ensureHost() {
+          const mount = createSceneAdditionalStudiosHost(sceneId);
+
+          if (mount && mount !== target) {
+            setTarget(mount);
+          }
+        }
+
+        ensureHost();
+
+        observer = new MutationObserver(function () {
+          const current = document.querySelector(
+            ".many-studios-inline-item[data-scene-id='" + sceneId + "'] .many-studios-inline-mount",
+          );
+
+          if (!current || !current.isConnected) {
+            ensureHost();
+          }
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+
+        async function loadNativeComponent() {
+          if (!getNativeStudioIDSelect()) {
+            const loadable =
+              PluginApi.loadableComponents &&
+              PluginApi.loadableComponents.Studios;
+
+            if (
+              loadable &&
+              PluginApi.utils &&
+              typeof PluginApi.utils.loadComponents === "function"
+            ) {
+              await PluginApi.utils.loadComponents([loadable]);
+            }
+          }
+
+          if (!cancelled) {
+            setNativeReady(true);
+          }
+        }
+
+        loadNativeComponent().catch(function (error) {
+          logError("Failed to load native StudioIDSelect", error);
+
+          if (!cancelled) {
+            setNativeReady(true);
+          }
+        });
+
+        return function () {
+          cancelled = true;
+
+          if (observer) {
+            observer.disconnect();
+          }
+
+          const item = document.querySelector(
+            ".many-studios-inline-item[data-scene-id='" + sceneId + "']",
+          );
+
+          if (item) {
+            item.remove();
+          }
+        };
+      },
+      [sceneId],
+    );
+
+    if (!target) {
+      return null;
+    }
+
+    return ReactDOM.createPortal(
+      createElement(SceneAdditionalStudiosInline, {
+        sceneId: sceneId,
+        nativeReady: nativeReady,
+      }),
+      target,
     );
   }
 
@@ -498,7 +563,10 @@
           Fragment,
           null,
           rendered,
-          createElement(SceneAdditionalStudiosPanel, { key: "many-studios-scene-" + sceneId, sceneId: sceneId })
+          createElement(SceneAdditionalStudiosBridge, {
+            key: "many-studios-scene-" + sceneId,
+            sceneId: sceneId,
+          }),
         );
       });
       log("ScenePage patch installed");
